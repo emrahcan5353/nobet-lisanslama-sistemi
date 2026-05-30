@@ -533,7 +533,6 @@ function SifreModal({user,onSave,onClose}){
 }
 
 
-
 /* ═══════════════════════════════════════════════
 
 /* ── LoginScreen ─────────────────────────────────────── */
@@ -1385,10 +1384,10 @@ function PuantajTablosu({state,update,user,yil,ay}){
     return stats;
   };
   const sumTh=lbl=>(
-    <th style={{padding:"6px 4px",background:"#1e3a5f",color:"#fff",textAlign:"center",minWidth:64,fontSize:10,whiteSpace:"pre-line",lineHeight:1.3,position:"sticky",top:0,zIndex:2}}>{lbl}</th>
+    <th style={{padding:"6px 4px",background:"#1e3a5f",color:"#fff",textAlign:"center",minWidth:64,fontSize:10,whiteSpace:"pre-line",lineHeight:1.3,position:"sticky",top:0,zIndex:5}}>{lbl}</th>
   );
   return(
-    <div style={{padding:16,fontFamily:"'Segoe UI',system-ui,sans-serif"}}>
+    <div style={{padding:16,fontFamily:"'Segoe UI',system-ui,sans-serif",display:"flex",flexDirection:"column",height:"100%",boxSizing:"border-box"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,flexWrap:"wrap",gap:8}}>
         <div>
           <h2 style={{margin:0,fontSize:17,color:"#0f4c81",fontWeight:800}}>{AYLAR[ay]} {yil} Puantajı</h2>
@@ -1432,18 +1431,18 @@ function PuantajTablosu({state,update,user,yil,ay}){
         ))}
         <span style={{color:"#7c3aed",fontWeight:600}}>Mor = İzin kodu</span>
       </div>
-      <div style={{overflow:"auto",maxHeight:"calc(100vh - 240px)",borderRadius:7,border:"1px solid #e5e7eb",boxShadow:"0 2px 8px rgba(0,0,0,.07)"}}>
+      <div style={{flex:1,overflow:"auto",borderRadius:7,border:"1px solid #e5e7eb",boxShadow:"0 2px 8px rgba(0,0,0,.07)",minHeight:0}}>
         <table style={{borderCollapse:"collapse",fontSize:11,whiteSpace:"nowrap"}}>
           <thead>
             <tr>
-              <th style={{minWidth:155,padding:"8px 10px",background:"#0f4c81",color:"#fff",textAlign:"left",position:"sticky",left:0,zIndex:3,top:0}}>Ad Soyad / Unvan</th>
-              {user.rol==="yonetici"&&<th style={{width:76,padding:"6px 4px",background:"#0f4c81",color:"#fff",textAlign:"center",position:"sticky",top:0,zIndex:2}}>Birim</th>}
+              <th style={{minWidth:155,padding:"8px 10px",background:"#0f4c81",color:"#fff",textAlign:"left",position:"sticky",left:0,zIndex:10,top:0}}>Ad Soyad / Unvan</th>
+              {user.rol==="yonetici"&&<th style={{width:76,padding:"6px 4px",background:"#0f4c81",color:"#fff",textAlign:"center",position:"sticky",top:0,zIndex:5}}>Birim</th>}
               {days.map(d=>{
                 const {t,n}=dayInfo(yil,ay,d);const dw=dow(yil,ay,d);
                 const clr={tatil:"#dc2626",arefe:"#666666",hs:"#555555",is:"#374151"}[t];
                 const bg={tatil:"#fff0f0",arefe:"#f2f2f2",hs:"#e8e8e8",is:"#f8fafc"}[t];
                 return(
-                  <th key={d} title={n||""} style={{background:bg,padding:"2px 0",textAlign:"center",width:54,minWidth:54,borderLeft:"1px solid #e5e7eb",position:"sticky",top:0,zIndex:2}}>
+                  <th key={d} title={n||""} style={{background:bg,padding:"2px 0",textAlign:"center",width:54,minWidth:54,borderLeft:"1px solid #e5e7eb",position:"sticky",top:0,zIndex:5}}>
                     <div style={{fontSize:10,fontWeight:800,color:clr}}>{d}</div>
                     <div style={{fontSize:9,color:clr,opacity:.8}}>{GK[dw]}</div>
                   </th>
@@ -1454,7 +1453,7 @@ function PuantajTablosu({state,update,user,yil,ay}){
               {sumTh("Gündüz\nMesai")}
               {sumTh("Fazla\nMesai")}
               {sumTh("Çlş.\nGereken")}
-              {user.rol==="yonetici"&&<th style={{padding:"6px 4px",background:"#1e3a5f",color:"#fff",textAlign:"center",minWidth:52,fontSize:10,position:"sticky",top:0,zIndex:2}}>İşlem</th>}
+              {user.rol==="yonetici"&&<th style={{padding:"6px 4px",background:"#1e3a5f",color:"#fff",textAlign:"center",minWidth:52,fontSize:10,position:"sticky",top:0,zIndex:5}}>İşlem</th>}
             </tr>
           </thead>
           <tbody>
@@ -1631,7 +1630,7 @@ function PersonelYonetimi({state,update,user}){
     return true;
   });
   return(
-    <div style={{padding:20,fontFamily:"'Segoe UI',system-ui,sans-serif"}}>
+    <div style={{padding:20,fontFamily:"'Segoe UI',system-ui,sans-serif",display:"flex",flexDirection:"column",height:"100%",boxSizing:"border-box"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
         <div>
           <h2 style={{margin:0,fontSize:18,color:"#0f4c81",fontWeight:800}}>Personel Yönetimi</h2>
@@ -1652,11 +1651,11 @@ function PersonelYonetimi({state,update,user}){
         )}
         <div style={{marginLeft:"auto",padding:"5px 12px",background:"#f0f9ff",borderRadius:5,fontSize:12,color:"#0369a1",fontWeight:600}}>{filtered.length} personel</div>
       </div>
-      <div style={{overflow:"auto",maxHeight:"calc(100vh - 220px)",borderRadius:7,border:"1px solid #e5e7eb",boxShadow:"0 1px 4px rgba(0,0,0,.06)"}}>
+      <div style={{flex:1,overflow:"auto",borderRadius:7,border:"1px solid #e5e7eb",boxShadow:"0 1px 4px rgba(0,0,0,.06)",minHeight:0}}>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
           <thead>
             <tr style={{background:"#0f4c81",color:"#fff"}}>
-              {["Ad Soyad","Unvan","Çalışma Türü","Birim","İşlemler"].map(h=><th key={h} style={{padding:"9px 12px",textAlign:"left",fontWeight:600,position:"sticky",top:0,zIndex:1}}>{h}</th>)}
+              {["Ad Soyad","Unvan","Çalışma Türü","Birim","İşlemler"].map(h=><th key={h} style={{padding:"9px 12px",textAlign:"left",fontWeight:600,position:"sticky",top:0,zIndex:5}}>{h}</th>)}
             </tr>
           </thead>
           <tbody>
@@ -1812,22 +1811,24 @@ function BirimlerYonetimi({state,update}){
         <h2 style={{margin:0,fontSize:18,color:"#0f4c81",fontWeight:800}}>Birim Yönetimi</h2>
         <button style={S.btn} onClick={()=>{setForm({ad:""});setEditB(null);setShow(true);}}>+ Birim Ekle</button>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:12}}>
-        {birimler.map((b,bi)=>(
-          <div key={b.id} style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:8,padding:16,borderTop:`4px solid ${BRENK[bi%BRENK.length]}`,boxShadow:"0 1px 4px rgba(0,0,0,.06)"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-              <div>
-                <div style={{fontSize:16,fontWeight:800,color:"#111827"}}>{b.ad}</div>
-                <div style={{fontSize:12,color:"#6b7280",marginTop:6}}>👥 {personeller.filter(p=>p.birimId===b.id).length} personel</div>
-                <div style={{fontSize:12,color:"#6b7280",marginTop:2}}>👤 {users.filter(u=>u.birimId===b.id&&u.rol==="sorumlu").map(u=>u.ad).join(", ")||"Sorumlu atanmamış"}</div>
-              </div>
-              <div style={{display:"flex",gap:4}}>
-                <button style={{...S.btnG,padding:"5px 8px",fontSize:12}} onClick={()=>{setForm({ad:b.ad});setEditB(b);setShow(true);}}>✏️</button>
-                <button style={{...S.btnR,padding:"5px 8px",fontSize:12}} onClick={()=>del(b.id)}>🗑</button>
+      <div style={{flex:1,overflow:"auto",minHeight:0}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:12}}>
+          {birimler.map((b,bi)=>(
+            <div key={b.id} style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:8,padding:16,borderTop:`4px solid ${BRENK[bi%BRENK.length]}`,boxShadow:"0 1px 4px rgba(0,0,0,.06)"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                <div>
+                  <div style={{fontSize:16,fontWeight:800,color:"#111827"}}>{b.ad}</div>
+                  <div style={{fontSize:12,color:"#6b7280",marginTop:6}}>👥 {personeller.filter(p=>p.birimId===b.id).length} personel</div>
+                  <div style={{fontSize:12,color:"#6b7280",marginTop:2}}>👤 {users.filter(u=>u.birimId===b.id&&u.rol==="sorumlu").map(u=>u.ad).join(", ")||"Sorumlu atanmamış"}</div>
+                </div>
+                <div style={{display:"flex",gap:4}}>
+                  <button style={{...S.btnG,padding:"5px 8px",fontSize:12}} onClick={()=>{setForm({ad:b.ad});setEditB(b);setShow(true);}}>✏️</button>
+                  <button style={{...S.btnR,padding:"5px 8px",fontSize:12}} onClick={()=>del(b.id)}>🗑</button>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
       {show&&(
         <Modal title={editB?"Birim Düzenle":"Birim Ekle"} onClose={()=>setShow(false)} width={340}>
@@ -1860,14 +1861,14 @@ function KullanicilarYonetimi({state,update}){
   };
   const del=id=>{if(id==="u0")return alert("Ana yönetici silinemez");if(!window.confirm("Sil?"))return;update(s=>({...s,users:s.users.filter(u=>u.id!==id)}));};
   return(
-    <div style={{padding:20,fontFamily:"'Segoe UI',system-ui,sans-serif"}}>
+    <div style={{padding:20,fontFamily:"'Segoe UI',system-ui,sans-serif",display:"flex",flexDirection:"column",height:"100%",boxSizing:"border-box"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
         <h2 style={{margin:0,fontSize:18,color:"#0f4c81",fontWeight:800}}>Kullanıcı Yönetimi</h2>
         <button style={S.btn} onClick={()=>{setForm({ad:"",user:"",pass:"",rol:"sorumlu",birimId:birimler[0]?.id||""});setEditU(null);setShow(true);}}>+ Kullanıcı Ekle</button>
       </div>
-      <div style={{overflow:"auto",maxHeight:"calc(100vh - 180px)",borderRadius:7,border:"1px solid #e5e7eb",boxShadow:"0 1px 4px rgba(0,0,0,.06)"}}>
+      <div style={{flex:1,overflow:"auto",borderRadius:7,border:"1px solid #e5e7eb",boxShadow:"0 1px 4px rgba(0,0,0,.06)",minHeight:0}}>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-          <thead><tr style={{background:"#0f4c81",color:"#fff"}}>{["Ad Soyad","Kullanıcı Adı","Rol","Birim","İşlemler"].map(h=><th key={h} style={{padding:"9px 12px",textAlign:"left",fontWeight:600,position:"sticky",top:0,zIndex:1}}>{h}</th>)}</tr></thead>
+          <thead><tr style={{background:"#0f4c81",color:"#fff"}}>{["Ad Soyad","Kullanıcı Adı","Rol","Birim","İşlemler"].map(h=><th key={h} style={{padding:"9px 12px",textAlign:"left",fontWeight:600,position:"sticky",top:0,zIndex:5}}>{h}</th>)}</tr></thead>
           <tbody>
             {users.map((u,i)=>(
               <tr key={u.id} style={{background:i%2===0?"#fff":"#fafafa"}}>
@@ -1920,7 +1921,6 @@ function KullanicilarYonetimi({state,update}){
 }
 
 
-
 /* ═══════════════════════════════════════════════
 
 
@@ -1950,9 +1950,11 @@ export default function App(){
   useEffect(()=>{
     const load=async()=>{
       try{
-        const r=localStorage.getItem("nobet_v3");
-        if(r){
-          const loaded=JSON.parse(r);
+        let raw=null;
+        try{ const r=await window.storage.get("nobet_v3"); if(r?.value) raw=r.value; }
+        catch(e){ raw=localStorage.getItem("nobet_v3"); }
+        if(raw){
+          const loaded=JSON.parse(raw);
           // Eski kayıtlarla uyumluluk için INIT ile birleştir
           setState({
             ...INIT,
@@ -1972,7 +1974,8 @@ export default function App(){
   const update=useCallback(updater=>{
     setState(prev=>{
       const next=typeof updater==="function"?updater(prev):{...prev,...updater};
-      try { localStorage.setItem("nobet_v3",JSON.stringify(next)); } catch(e) {}
+      try{ window.storage.set("nobet_v3",JSON.stringify(next)).catch(()=>{}); }catch(e){}
+      try{ localStorage.setItem("nobet_v3",JSON.stringify(next)); }catch(e){}
       return next;
     });
   },[]);
@@ -1984,7 +1987,7 @@ export default function App(){
   if(!user) return <LoginScreen users={state.users} onLogin={setUser}/>;
   const props={state,update,user,yil,ay};
   return(
-    <div style={{minHeight:"100vh",background:"#f1f5f9",fontFamily:"'Segoe UI',system-ui,sans-serif"}}>
+    <div style={{height:"100vh",background:"#f1f5f9",fontFamily:"'Segoe UI',system-ui,sans-serif",display:"flex",flexDirection:"column",overflow:"hidden"}}>
       <Header user={user} tab={tab} setTab={setTab} yil={yil} ay={ay}
         setYil={y=>{setYil(y);setTab("puantaj");}} setAy={m=>{setAy(m);setTab("puantaj");}}
         onLogout={()=>{setUser(null);setTab("puantaj");}}
@@ -1993,7 +1996,7 @@ export default function App(){
           setUser(u=>({...u,pass:pwd}));
         }}
         birimler={state.birimler}/>
-      <div>
+      <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}>
         {tab==="puantaj"&&<PuantajTablosu {...props}/>}
         {tab==="personel"&&<PersonelYonetimi {...props}/>}
         {tab==="birimler"&&user.rol==="yonetici"&&<BirimlerYonetimi {...props}/>}
