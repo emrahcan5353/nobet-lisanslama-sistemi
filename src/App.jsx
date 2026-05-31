@@ -831,14 +831,14 @@ const BW = {
   tatil:    {bg:"#f5c8c8", bdr:"#000", text:"#000"},  // Çok açık kırmızı — siyah yazı
 };
 
-function PrintView({state,user,yil,ay,onClose}){
+function PrintView({state,user,yil,ay,filtreBirim,onClose}){
   const personeller=state.personeller||[];
   const birimler=state.birimler||[];
   const puantaj=state.puantaj||{};
   const manuelFazla=state.manuelFazla||{};
   const cokluBirim=state.cokluBirim||{};
   const ciftBirimGun=state.ciftBirimGun||{};
-  const efBirim=user.rol==="sorumlu"?user.birimId:"";
+  const efBirim=user.rol==="sorumlu"?user.birimId:(filtreBirim||"");
   const filtered=personeller.filter(p=>!efBirim||p.birimId===efBirim);
   const days=Array.from({length:dim(yil,ay)},(_,i)=>i+1);
   const pk=pid=>`${pid}_${yil}_${ay}`;
@@ -1444,7 +1444,7 @@ function PuantajTablosu({state,update,user,yil,ay}){
           )}
           {/* [YENİ]: Kullanıcının puantaja özel not ekleyebilmesi için oluşturulan "Açıklamalar" modülü butonu */}
           <button onClick={()=>{
-            const pkA=`${user.rol==="sorumlu"?user.birimId:filtreBirim||"genel"}_${yil}_${ay}`;
+            const pkA=`${efBirim||"genel"}_${yil}_${ay}`;
             setAciklamaForm(state.aciklamalar?.[pkA]||"");
             setShowAciklama(true);
           }}
@@ -1586,7 +1586,7 @@ function PuantajTablosu({state,update,user,yil,ay}){
           onClose={()=>setCokluM(null)}/>
       )}
       {takvimP&&<TakvimModal p={takvimP} row={puantaj[pk(takvimP.id)]||{}} yil={yil} ay={ay} onClose={()=>setTakvimP(null)}/>}
-      {showPrint&&<PrintView state={state} user={user} yil={yil} ay={ay} onClose={()=>setShowPrint(false)}/>}
+      {showPrint&&<PrintView state={state} user={user} yil={yil} ay={ay} filtreBirim={filtreBirim} onClose={()=>setShowPrint(false)}/>}
       {ciftGunModal&&(
         <CiftBirimGunModal
           p={ciftGunModal} yil={yil} ay={ay}
@@ -1641,7 +1641,7 @@ function PuantajTablosu({state,update,user,yil,ay}){
           <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:14}}>
             <button style={S.btnG} onClick={()=>setShowAciklama(false)}>İptal</button>
             <button style={S.btn} onClick={()=>{
-              const pkA=`${user.rol==="sorumlu"?user.birimId:filtreBirim||"genel"}_${yil}_${ay}`;
+              const pkA=`${efBirim||"genel"}_${yil}_${ay}`;
               update(s=>({...s,aciklamalar:{...(s.aciklamalar||{}),[pkA]:aciklamaForm}}));
               setShowAciklama(false);
             }}>Kaydet</button>
