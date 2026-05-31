@@ -918,10 +918,10 @@ function PrintView({state,user,yil,ay,filtreBirim,onClose}){
   const renderSayfa=(sayfaPers,sayfaNo)=>(
     <div key={sayfaNo} className="puantaj-page" style={{background:"#fff",padding:"8px 6px",fontFamily:"Arial,sans-serif",fontSize:8,minHeight:540,height:"auto",display:"flex",flexDirection:"column",marginBottom:20,boxShadow:"0 4px 16px rgba(0,0,0,0.15)",borderRadius:4}}>
       {/* Başlık */}
-      <div style={{textAlign:"center",marginBottom:5,borderBottom:"3px solid #000",paddingBottom:5}}>
+      <div style={{textAlign:"center",marginBottom:2,borderBottom:"3px solid #000",paddingBottom:3}}>
         <div style={{fontSize:11,fontWeight:800,letterSpacing:0.3,color:"#000"}}>RİZE RECEP TAYYİP ERDOĞAN ÜNİVERSİTESİ EĞİTİM ARAŞTIRMA HASTANESİ</div>
         <div style={{fontSize:9,fontWeight:700,marginTop:1,color:"#000"}}>NÖBET PUANTAJ CETVELİ</div>
-        <div style={{fontSize:8,marginTop:2,display:"flex",justifyContent:"center",gap:14,flexWrap:"wrap",color:"#000"}}>
+        <div style={{fontSize:8,marginTop:1,display:"flex",justifyContent:"center",gap:14,flexWrap:"wrap",color:"#000"}}>
           <span><strong>Birim:</strong> {birimLabel}</span>
           <span><strong>Dönem:</strong> {AYLAR[ay]} {yil}</span>
           <span><strong>Toplam:</strong> {filtered.length} personel</span>
@@ -960,7 +960,7 @@ function PrintView({state,user,yil,ay,filtreBirim,onClose}){
               const stats=statOf(p);
               const rb=ri%2===0?"#fff":"#f0f0f0";
               return(
-                <tr key={p.id} style={{background:rb,height:17}}>
+                <tr key={p.id} style={{background:rb,height:15}}>
                   <td style={{padding:"3px 5px",border:"1px solid #000",fontSize:8,fontWeight:700,background:rb,color:"#000"}}>
                     <div style={{color:"#000",fontWeight:800}}>{p.ad} {p.soyad}</div>
                     <div style={{fontSize:6.5,color:"#000",fontWeight:500,marginTop:1}}>{UNVAN_AD[p.unvan]} · {CALISMA_AD[p.calisma]}{p.sendikaYku && p.sendikaGun ?" · YKÜ("+p.sendikaGun.slice(0,3)+")":""}{p.ciftBirim?" · 🔀":""}</div>
@@ -971,7 +971,7 @@ function PrintView({state,user,yil,ay,filtreBirim,onClose}){
                     const bwc=dBg(d,p);
                     const diagonalStyle=bwc===BW.sendika?{backgroundImage:"repeating-linear-gradient(45deg,#999 0,#999 1px,transparent 0,transparent 50%)",backgroundSize:"4px 4px",backgroundColor:"#e0e0e0"}:{};
                     return(
-                      <td key={d} style={{padding:"1px",textAlign:"center",border:`1px solid ${bwc.bdr}`,background:bwc.bg,...diagonalStyle,fontSize:6.5,width:26,minWidth:26,maxWidth:26,height:18}}>
+                      <td key={d} style={{padding:"1px",textAlign:"center",border:`1px solid ${bwc.bdr}`,background:bwc.bg,...diagonalStyle,fontSize:6.5,width:26,minWidth:26,maxWidth:26,height:16}}>
                         {/* [YENİ]: whiteSpace:"nowrap" ve harf aralığı daraltması eklenerek 08-16 gibi saatlerin alt alta kırılması engellendi, tek satıra sığdırıldı */}
                         {val?<div style={{fontWeight:800,color:"#000",fontSize:pv?.type==="izin"?6.5:7.5,lineHeight:1.1,whiteSpace:"nowrap",letterSpacing:"-0.4px"}}>{val}</div>
                             :bwc===BW.analik?<div style={{fontSize:5.5,color:"#555",fontWeight:600}}>ANİ</div>:null}
@@ -996,11 +996,8 @@ function PrintView({state,user,yil,ay,filtreBirim,onClose}){
         </table>
       </div>
 
-      {/* Boşluk - imza alanını alta itmek için */}
-      <div style={{flex:1,minHeight:10}}/>
-
       {/* İzin Kodları Açıklaması */}
-      <div style={{marginTop:5,padding:"4px 7px",border:"2px solid #000",borderRadius:2,fontSize:6.5,color:"#000"}}>
+      <div style={{marginTop:2,padding:"2px 5px",border:"2px solid #000",borderRadius:2,fontSize:6.5,color:"#000"}}>
         <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:2}}>
           <strong style={{fontSize:7}}>RENKLER:</strong>
           {[
@@ -1028,33 +1025,30 @@ function PrintView({state,user,yil,ay,filtreBirim,onClose}){
       {/* AÇIKLAMALAR (Sadece son sayfada) */}
       {/* [YENİ]: Sisteme eklenen "Açıklamalar" (Notlar) kısmının PDF çıktısında imzalardan hemen önce okunaklı şekilde yazdırılmasını sağlar */}
       {sayfaNo===toplamSayfa && aciklamaTxt && (
-        <div style={{marginTop:6, padding:"6px 8px", border:"2px solid #000", borderRadius:2, fontSize:8.5, color:"#000", background:"#fff", whiteSpace:"pre-wrap", lineHeight:1.3}}>
+        <div style={{marginTop:2, padding:"2px 5px", border:"2px solid #000", borderRadius:2, fontSize:8.5, color:"#000", background:"#fff", whiteSpace:"pre-wrap", lineHeight:1.3}}>
            <strong style={{fontSize:9, textDecoration:"underline"}}>AÇIKLAMALAR / NOTLAR:</strong><br/>
            {aciklamaTxt}
         </div>
       )}
 
       {/* İmza Alanı (Her Sayfada) */}
-      <div style={{marginTop:8,display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:5}}>
+      <div style={{marginTop:3,display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:5}}>
         {imzaKutulari.map((k,i)=>(
-          <div key={i} style={{border:"2px solid #000",borderRadius:2,padding:"6px 9px",minHeight:75,display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
+          <div key={i} style={{border:"2px solid #000",borderRadius:2,padding:"4px 9px",minHeight:60,display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
             <div style={{fontSize:7,fontWeight:800,textAlign:"center",borderBottom:"2px solid #000",paddingBottom:3,marginBottom:4,whiteSpace:"pre-line",lineHeight:1.3,color:"#000",minHeight:22}}>
               {k.unvan}
             </div>
             <div style={{textAlign:"center",fontSize:8,fontWeight:700,color:"#000",minHeight:12,padding:"1px 0",textDecoration:k.ad?"underline":"none"}}>
               {k.ad||<span style={{color:"#999",fontStyle:"italic",fontWeight:400}}>—</span>}
             </div>
-            <div style={{marginTop:"auto",paddingTop:16,borderTop:"2px solid #000",textAlign:"center",fontSize:7,color:"#000",letterSpacing:2,fontWeight:700}}>
+            <div style={{marginTop:"auto",paddingTop:8,borderTop:"2px solid #000",textAlign:"center",fontSize:7,color:"#000",letterSpacing:2,fontWeight:700}}>
               İ M Z A
             </div>
           </div>
         ))}
       </div>
 
-      {/* Alt bilgi */}
-      <div style={{marginTop:3,fontSize:6,color:"#000",textAlign:"right",borderTop:"1px solid #666",paddingTop:2,fontWeight:600}}>
-        Sayfa {sayfaNo}/{toplamSayfa} · Oluşturma: {new Date().toLocaleDateString("tr-TR")} {new Date().toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}
-      </div>
+
     </div>
   );
 
