@@ -792,18 +792,20 @@ function CokluBirimModal({pAd,unvan,calisma,yil,ay,birimler,mevcut,onSave,onClos
 ═══════════════════════════════════════════════ */
 const PRINT_CSS = `
 @media print {
-  @page { size: A4 landscape; margin: 5mm 4mm; }
-  html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
+  @page { size: A4 landscape; margin: 2mm; }
+  html, body, #root { background: #fff !important; margin: 0 !important; padding: 0 !important; height: auto !important; min-height: auto !important; display: block !important; position: static !important; overflow: visible !important; }
   body * { visibility: hidden !important; }
+  .print-modal-wrapper, .print-modal-wrapper * { visibility: visible !important; }
   #nobetPrintArea, #nobetPrintArea * { visibility: visible !important; }
-  #nobetPrintArea { position: absolute; left: 0; top: 0; width: 100%; background: #fff; margin: 0; padding: 0; }
+  .print-modal-wrapper { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; background: none !important; padding: 0 !important; margin: 0 !important; overflow: visible !important; height: auto !important; display: block !important; }
+  #nobetPrintArea { position: static !important; width: 100% !important; max-width: none !important; background: #fff !important; margin: 0 !important; padding: 0 !important; overflow: visible !important; display: block !important; }
   .no-print { display: none !important; }
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
   table { border-collapse: collapse !important; page-break-inside: avoid; width: 100% !important; }
   td, th { border: 1px solid #000 !important; color: #000 !important; }
   tr { page-break-inside: avoid; }
-  .puantaj-page { page-break-after: always; page-break-inside: avoid; padding: 4mm 2mm !important; box-sizing: border-box; }
-  .puantaj-page:last-child { page-break-after: auto; }
+  .puantaj-page { min-height: 0 !important; height: auto !important; padding: 2mm !important; margin-bottom: 0 !important; box-shadow: none !important; border: none !important; box-sizing: border-box; }
+  .puantaj-page:not(:first-child) { page-break-before: always; }
   /* Siyah-beyaz net renkler */
   .bw-tatil { background: #f5c8c8 !important; color: #000 !important; }
   .bw-arefe { background: #aaa !important; color: #000 !important; }
@@ -812,6 +814,8 @@ const PRINT_CSS = `
   .bw-analik { background: #e8e8e8 !important; color: #000 !important; }
   .bw-sut1 { background: #d0d0d0 !important; color: #000 !important; }
   .bw-sut2 { background: #b8b8b8 !important; color: #000 !important; }
+  /* Çıktı Alırken Kırpılmayı (Tek Sayfada Sıkışmayı) Önleyen Stiller */
+  .print-reset { overflow: visible !important; height: auto !important; max-height: none !important; display: block !important; position: static !important; }
 }
 `;
 
@@ -839,9 +843,11 @@ function PrintView({state,user,yil,ay,onClose}){
   const days=Array.from({length:dim(yil,ay)},(_,i)=>i+1);
   const pk=pid=>`${pid}_${yil}_${ay}`;
   const bAd=id=>birimler.find(b=>b.id===id)?.ad||"";
+  const pkA=`${efBirim||"genel"}_${yil}_${ay}`;
+  const aciklamaTxt = state.aciklamalar?.[pkA] || "";
 
-  // Sayfa başına personel sayısı
-  const PERSONEL_PER_PAGE=20;
+  // [YENİ]: Yazdırılan A4 sayfada satırların ferahlaması ve alt tarafta "Açıklamalar" bölümüne yer kalması adına limit 16'ya düşürüldü.
+  const PERSONEL_PER_PAGE=16;
   const sayfalar=[];
   for(let i=0;i<Math.max(1,filtered.length);i+=PERSONEL_PER_PAGE){
     sayfalar.push(filtered.slice(i,i+PERSONEL_PER_PAGE));
@@ -889,7 +895,12 @@ function PrintView({state,user,yil,ay,onClose}){
     const style=document.createElement("style");
     style.innerHTML=PRINT_CSS;
     document.head.appendChild(style);
-    setTimeout(()=>{window.print();setTimeout(()=>document.head.removeChild(style),500);},100);
+    setTimeout(()=>{
+      window.print();
+      setTimeout(()=>{
+        if(document.head.contains(style)) document.head.removeChild(style);
+      },500);
+    },100);
   };
 
   const birimLabel=efBirim?bAd(efBirim):"Tüm Birimler";
@@ -905,7 +916,7 @@ function PrintView({state,user,yil,ay,onClose}){
 
   // Bir sayfa render eden fonksiyon
   const renderSayfa=(sayfaPers,sayfaNo)=>(
-    <div key={sayfaNo} className="puantaj-page" style={{background:"#fff",padding:"8px 6px",fontFamily:"Arial,sans-serif",fontSize:8,pageBreakAfter:sayfaNo<toplamSayfa?"always":"auto",pageBreakInside:"avoid",minHeight:540,height:"auto",display:"flex",flexDirection:"column",marginBottom:20,boxShadow:"0 4px 16px rgba(0,0,0,0.15)",borderRadius:4}}>
+    <div key={sayfaNo} className="puantaj-page" style={{background:"#fff",padding:"8px 6px",fontFamily:"Arial,sans-serif",fontSize:8,minHeight:540,height:"auto",display:"flex",flexDirection:"column",marginBottom:20,boxShadow:"0 4px 16px rgba(0,0,0,0.15)",borderRadius:4}}>
       {/* Başlık */}
       <div style={{textAlign:"center",marginBottom:5,borderBottom:"3px solid #000",paddingBottom:5}}>
         <div style={{fontSize:11,fontWeight:800,letterSpacing:0.3,color:"#000"}}>RİZE RECEP TAYYİP ERDOĞAN ÜNİVERSİTESİ EĞİTİM ARAŞTIRMA HASTANESİ</div>
@@ -923,12 +934,12 @@ function PrintView({state,user,yil,ay,onClose}){
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:7}}>
           <thead>
             <tr>
-              <th style={{padding:"4px 6px",textAlign:"left",minWidth:95,border:"2px solid #000",fontSize:8,fontWeight:800,background:"#fff",color:"#000"}}>Ad Soyad / Unvan</th>
+              <th style={{padding:"4px 6px",textAlign:"left",minWidth:110,border:"2px solid #000",fontSize:8,fontWeight:800,background:"#fff",color:"#000"}}>Ad Soyad / Unvan</th>
               {days.map(d=>{
                 const {t}=dayInfo(yil,ay,d);const dw=dow(yil,ay,d);
                 const bwc={tatil:BW.tatil,arefe:BW.arefe,hs:BW.hafta,is:BW.normal}[t];
                 return(
-                  <th key={d} style={{padding:"2px 0",textAlign:"center",width:22,minWidth:22,border:"1px solid #000",background:bwc.bg,fontSize:6.5,color:bwc.text}}>
+                  <th key={d} style={{padding:"2px 0",textAlign:"center",width:26,minWidth:26,border:"1px solid #000",background:bwc.bg,fontSize:6.5,color:bwc.text}}>
                     <div style={{fontWeight:800}}>{d}</div>
                     <div style={{fontSize:5.5,opacity:.9}}>{GK[dw]}</div>
                     {t==="tatil"&&<div style={{fontSize:5,fontWeight:700}}>T</div>}
@@ -938,7 +949,7 @@ function PrintView({state,user,yil,ay,onClose}){
                 );
               })}
               {["Çlş\nSaati","Gece\nMesai","Gündüz\nMesai","Fazla\nMesai","Çlş.\nGereken"].map(h=>(
-                <th key={h} style={{padding:"3px 3px",textAlign:"center",minWidth:32,border:"2px solid #000",fontSize:7,whiteSpace:"pre-line",lineHeight:1.2,background:"#fff",color:"#000",fontWeight:800}}>{h}</th>
+                <th key={h} style={{padding:"3px 3px",textAlign:"center",width:34,minWidth:34,border:"2px solid #000",fontSize:7,whiteSpace:"pre-line",lineHeight:1.2,background:"#fff",color:"#000",fontWeight:800}}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -952,7 +963,7 @@ function PrintView({state,user,yil,ay,onClose}){
                 <tr key={p.id} style={{background:rb,height:17}}>
                   <td style={{padding:"3px 5px",border:"1px solid #000",fontSize:8,fontWeight:700,background:rb,color:"#000"}}>
                     <div style={{color:"#000",fontWeight:800}}>{p.ad} {p.soyad}</div>
-                    <div style={{fontSize:6.5,color:"#000",fontWeight:500,marginTop:1}}>{UNVAN_AD[p.unvan]} · {CALISMA_AD[p.calisma]}{p.sendikaYku?" · YKÜ("+p.sendikaGun.slice(0,3)+")":""}{p.ciftBirim?" · 🔀":""}</div>
+                    <div style={{fontSize:6.5,color:"#000",fontWeight:500,marginTop:1}}>{UNVAN_AD[p.unvan]} · {CALISMA_AD[p.calisma]}{p.sendikaYku && p.sendikaGun ?" · YKÜ("+p.sendikaGun.slice(0,3)+")":""}{p.ciftBirim?" · 🔀":""}</div>
                   </td>
                   {days.map(d=>{
                     const val=cellVal(p.id,d);
@@ -960,8 +971,9 @@ function PrintView({state,user,yil,ay,onClose}){
                     const bwc=dBg(d,p);
                     const diagonalStyle=bwc===BW.sendika?{backgroundImage:"repeating-linear-gradient(45deg,#999 0,#999 1px,transparent 0,transparent 50%)",backgroundSize:"4px 4px",backgroundColor:"#e0e0e0"}:{};
                     return(
-                      <td key={d} style={{padding:"1px",textAlign:"center",border:`1px solid ${bwc.bdr}`,background:bwc.bg,...diagonalStyle,fontSize:6.5,minWidth:22,maxWidth:24,height:18}}>
-                        {val?<div style={{fontWeight:800,color:"#000",fontSize:pv?.type==="izin"?6.5:7,lineHeight:1.2}}>{val}</div>
+                      <td key={d} style={{padding:"1px",textAlign:"center",border:`1px solid ${bwc.bdr}`,background:bwc.bg,...diagonalStyle,fontSize:6.5,width:26,minWidth:26,maxWidth:26,height:18}}>
+                        {/* [YENİ]: whiteSpace:"nowrap" ve harf aralığı daraltması eklenerek 08-16 gibi saatlerin alt alta kırılması engellendi, tek satıra sığdırıldı */}
+                        {val?<div style={{fontWeight:800,color:"#000",fontSize:pv?.type==="izin"?6.5:7.5,lineHeight:1.1,whiteSpace:"nowrap",letterSpacing:"-0.4px"}}>{val}</div>
                             :bwc===BW.analik?<div style={{fontSize:5.5,color:"#555",fontWeight:600}}>ANİ</div>:null}
                       </td>
                     );
@@ -973,7 +985,7 @@ function PrintView({state,user,yil,ay,onClose}){
                     {v:stats.faz,bg:stats.faz>0?"#bbb":"#fff",fw:700},
                     {v:stats.zon,bg:"#ddd",fw:700,bdr:"2px solid #333"},
                   ].map(({v,bg:cbg,fw,bdr:cbdr},si)=>(
-                    <td key={si} style={{padding:"2px 3px",textAlign:"center",border:cbdr||"1px solid #444",fontSize:7.5,fontWeight:fw,background:cbg,minWidth:32,color:"#000"}}>
+                    <td key={si} style={{padding:"2px 3px",textAlign:"center",border:cbdr||"1px solid #444",fontSize:7.5,fontWeight:fw,background:cbg,width:34,minWidth:34,color:"#000"}}>
                       {v.toFixed(1)}
                     </td>
                   ))}
@@ -1013,6 +1025,15 @@ function PrintView({state,user,yil,ay,onClose}){
         </div>
       </div>
 
+      {/* AÇIKLAMALAR (Sadece son sayfada) */}
+      {/* [YENİ]: Sisteme eklenen "Açıklamalar" (Notlar) kısmının PDF çıktısında imzalardan hemen önce okunaklı şekilde yazdırılmasını sağlar */}
+      {sayfaNo===toplamSayfa && aciklamaTxt && (
+        <div style={{marginTop:6, padding:"6px 8px", border:"2px solid #000", borderRadius:2, fontSize:8.5, color:"#000", background:"#fff", whiteSpace:"pre-wrap", lineHeight:1.3}}>
+           <strong style={{fontSize:9, textDecoration:"underline"}}>AÇIKLAMALAR / NOTLAR:</strong><br/>
+           {aciklamaTxt}
+        </div>
+      )}
+
       {/* İmza Alanı (Her Sayfada) */}
       <div style={{marginTop:8,display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:5}}>
         {imzaKutulari.map((k,i)=>(
@@ -1038,7 +1059,7 @@ function PrintView({state,user,yil,ay,onClose}){
   );
 
   return(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:8000,overflowY:"auto",padding:16}}>
+    <div className="print-modal-wrapper" style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:8000,overflowY:"auto",padding:16}}>
       <div className="no-print" style={{display:"flex",gap:10,justifyContent:"center",marginBottom:12,position:"sticky",top:0,zIndex:1}}>
         <button onClick={doPrint} style={{background:"#0f4c81",color:"#fff",border:"none",borderRadius:5,padding:"10px 24px",fontSize:14,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
           🖨️ Yazdır / PDF Al ({toplamSayfa} sayfa)
@@ -1349,6 +1370,8 @@ function PuantajTablosu({state,update,user,yil,ay}){
   const [showServisAd,setShowServisAd]=useState(false);
   const [ciftGunModal,setCiftGunModal]=useState(null); // personel obj
   const [showCiftBakis,setShowCiftBakis]=useState(false);
+  const [showAciklama,setShowAciklama]=useState(false);
+  const [aciklamaForm,setAciklamaForm]=useState("");
   const efBirim=user.rol==="sorumlu"?user.birimId:filtreBirim;
   const days=Array.from({length:dim(yil,ay)},(_,i)=>i+1);
   const filtered=personeller.filter(p=>!efBirim||p.birimId===efBirim);
@@ -1387,7 +1410,7 @@ function PuantajTablosu({state,update,user,yil,ay}){
     <th style={{padding:"6px 4px",background:"#1e3a5f",color:"#fff",textAlign:"center",minWidth:64,fontSize:10,whiteSpace:"pre-line",lineHeight:1.3,position:"sticky",top:0,zIndex:5}}>{lbl}</th>
   );
   return(
-    <div style={{padding:16,fontFamily:"'Segoe UI',system-ui,sans-serif",display:"flex",flexDirection:"column",height:"100%",boxSizing:"border-box"}}>
+    <div className="print-reset" style={{padding:16,fontFamily:"'Segoe UI',system-ui,sans-serif",display:"flex",flexDirection:"column",height:"100%",boxSizing:"border-box"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,flexWrap:"wrap",gap:8}}>
         <div>
           <h2 style={{margin:0,fontSize:17,color:"#0f4c81",fontWeight:800}}>{AYLAR[ay]} {yil} Puantajı</h2>
@@ -1419,6 +1442,15 @@ function PuantajTablosu({state,update,user,yil,ay}){
               ✍️ {state.imzaYetkilileri?.servisSorumluBirim?.[user.birimId]?"Adım: "+state.imzaYetkilileri.servisSorumluBirim[user.birimId]:"Servis Sorumlu Adım"}
             </button>
           )}
+          {/* [YENİ]: Kullanıcının puantaja özel not ekleyebilmesi için oluşturulan "Açıklamalar" modülü butonu */}
+          <button onClick={()=>{
+            const pkA=`${user.rol==="sorumlu"?user.birimId:filtreBirim||"genel"}_${yil}_${ay}`;
+            setAciklamaForm(state.aciklamalar?.[pkA]||"");
+            setShowAciklama(true);
+          }}
+            style={{background:"#10b981",color:"#fff",border:"none",borderRadius:5,padding:"7px 14px",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center",gap:6}}>
+            📝 Açıklamalar
+          </button>
           <button onClick={()=>setShowPrint(true)}
             style={{background:"#0f4c81",color:"#fff",border:"none",borderRadius:5,padding:"7px 14px",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center",gap:6}}>
             🖨️ Yazdır / PDF
@@ -1593,6 +1625,28 @@ function PuantajTablosu({state,update,user,yil,ay}){
           }))}
           onClose={()=>setShowServisAd(false)}
         />
+      )}
+      {showAciklama&&(
+        <Modal title={`${AYLAR[ay]} ${yil} - Açıklamalar / Notlar`} onClose={()=>setShowAciklama(false)} width={480}>
+          <div style={{fontSize:12,color:"#6b7280",marginBottom:10,lineHeight:1.4}}>
+            Bu alana yazdığınız notlar, yazdırma/PDF çıktısı aldığınızda tablonun <strong>en son sayfasında</strong> imza alanının hemen üstünde yer alacaktır. (Örn: X personeli ayın 15'inde işe başladı vs.)
+          </div>
+          <textarea
+             rows={8}
+             style={{...S.inp, width:"100%", padding:10, resize:"vertical", boxSizing:"border-box", fontSize:14}}
+             value={aciklamaForm}
+             onChange={e=>setAciklamaForm(e.target.value)}
+             placeholder="Puantaj ile ilgili açıklamaları buraya yazabilirsiniz..."
+          />
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:14}}>
+            <button style={S.btnG} onClick={()=>setShowAciklama(false)}>İptal</button>
+            <button style={S.btn} onClick={()=>{
+              const pkA=`${user.rol==="sorumlu"?user.birimId:filtreBirim||"genel"}_${yil}_${ay}`;
+              update(s=>({...s,aciklamalar:{...(s.aciklamalar||{}),[pkA]:aciklamaForm}}));
+              setShowAciklama(false);
+            }}>Kaydet</button>
+          </div>
+        </Modal>
       )}
     </div>
   );
@@ -1987,7 +2041,8 @@ export default function App(){
   if(!user) return <LoginScreen users={state.users} onLogin={setUser}/>;
   const props={state,update,user,yil,ay};
   return(
-    <div style={{height:"100vh",background:"#f1f5f9",fontFamily:"'Segoe UI',system-ui,sans-serif",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+    // [YENİ]: 100vh ve flex-direction:column ile sayfanın aşağı doğru taşması ve scroll sırasında tablo başlıklarının verilerle çakışması (overlap) hatası önlendi.
+    <div className="print-reset" style={{height:"100vh",background:"#f1f5f9",fontFamily:"'Segoe UI',system-ui,sans-serif",display:"flex",flexDirection:"column",overflow:"hidden"}}>
       <Header user={user} tab={tab} setTab={setTab} yil={yil} ay={ay}
         setYil={y=>{setYil(y);setTab("puantaj");}} setAy={m=>{setAy(m);setTab("puantaj");}}
         onLogout={()=>{setUser(null);setTab("puantaj");}}
@@ -1996,7 +2051,7 @@ export default function App(){
           setUser(u=>({...u,pass:pwd}));
         }}
         birimler={state.birimler}/>
-      <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+      <div className="print-reset" style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}>
         {tab==="puantaj"&&<PuantajTablosu {...props}/>}
         {tab==="personel"&&<PersonelYonetimi {...props}/>}
         {tab==="birimler"&&user.rol==="yonetici"&&<BirimlerYonetimi {...props}/>}
