@@ -336,7 +336,7 @@ function calcSendikaIzinSaat(personel,y,m){
 
 /* ── 4g — Zorunlu Saat & Aylık İstatistik ───────────────── */
 /* 🔧 zorunlu: aylık çalışma saati · calcRow: kişi özeti */
-function zorunlu(unvan,calisma,y,m,izinSet=new Set(),personel=null){
+function zorunlu(unvan,calisma,y,m,izinSet=new Set(),personel=null,row=null,idariIzinlerArr=[]){
   const total=dim(y,m),base=unvan==="radyoloji"?7:8;
   let sum=0;
   for(let d=1;d<=total;d++){
@@ -369,10 +369,32 @@ function zorunlu(unvan,calisma,y,m,izinSet=new Set(),personel=null){
       }
     }
   }
+  // [YENİ: İdari İzin Mantığı]
+  // Kullanıcının belirlediği (Örn: 25 Mayıs) idari izin günlerinde personel EĞER NÖBET TUTARSA:
+  // Normalde o günün zorunlu mesai hedefinden, personelin unvanı ve çalışma şekline göre 
+  // ilgili günün TAM SAATİ (8, 7, 4 veya 5) kadar hedeften otomatik indirim yapar.
+  // Not: Eğer personel idari izinde ÇALIŞMAZSA bu döngü çalışmaz ve 125 saat hedefi aynı kalır.
+  if(idariIzinlerArr?.length>0 && row){
+    for(const d of idariIzinlerArr){
+      if(!izinSet.has(d)){
+        const pv=parseVal(row[d]);
+        // pv.saat > 0 durumu personelin o gün çalıştığı (nöbet girdiği) anlamına gelir.
+        if(pv?.type==="v" && pv.saat>0){
+          const {t}=dayInfo(y,m,d);
+          // 1. Kural: Arefe gününde herkesin mesaisi 5 saattir.
+          // 2. Kural: Radyoloji 7 saat, diğerleri 8 saat hedefe sahiptir.
+          const gunBase=t==="arefe"?5:(unvan==="radyoloji"?7:8);
+          
+          // 3. Kural: Yarı zamanlı personelin hedefinden (8/2 = 4 saat) düşülür.
+          sum-=calisma==="yari"?gunBase/2:gunBase;
+        }
+      }
+    }
+  }
   return Math.max(0,sum);
 }
 
-function calcRow(row,unvan,calisma,y,m,mf,personel=null){
+function calcRow(row,unvan,calisma,y,m,mf,personel=null,idariIzinlerArr=[]){
   const total=dim(y,m); let cal=0,gece=0;
   const izinSet=new Set();
   for(let d=1;d<=total;d++){
@@ -381,7 +403,7 @@ function calcRow(row,unvan,calisma,y,m,mf,personel=null){
     if(pv.type==="izin") izinSet.add(d);
     else{cal+=pv.saat;gece+=nightH(pv.a,pv.b);}
   }
-  const zon=zorunlu(unvan,calisma,y,m,izinSet,personel);
+  const zon=zorunlu(unvan,calisma,y,m,izinSet,personel,row,idariIzinlerArr);
   const faz=mf!=null?mf:Math.max(0,cal-zon);
   const gM=calisma!=="sut"&&faz>0?Math.min(gece,faz):0;
   const gnM=calisma!=="sut"&&faz>0?faz-gM:0;
@@ -859,7 +881,7 @@ function PrintView({state,user,yil,ay,filtreBirim,onClose}){
     const row=puantaj[pk(p.id)]||{};
     const mf=manuelFazla[pk(p.id)];
     const cb=cokluBirim[pk(p.id)];
-    const stats=calcRow(row,p.unvan,p.calisma,yil,ay,mf?.deger??null,p);
+    const stats=calcRow(row,p.unvan,p.calisma,yil,ay,mf?.deger??null,p,state.idariIzinler?.[`${yil}_${ay}`]||[]);
     if(p.ciftBirim){
       const cbg=ciftBirimGun[pk(p.id)];
       const zon=cbg?cbg.hesap:0;
@@ -1153,6 +1175,61 @@ function ServisSorumluModal({birimId,birimAd,mevcut,onSave,onClose}){
   );
 }
 
+/* ── IdariIzinModal ──────────────────────────────── */
+/* [YENİ: İDARİ İZİN AYARLARI]
+ * Bu modül; Yönetici veya Sorumlunun sistem üzerinde 
+ * ayda maksimum 3 güne kadar İdari İzin tarihi belirleyebilmesini sağlar.
+ * Seçilen günler state.idariIzinler[yil_ay] içerisine kaydedilir.
+═══════════════════════════════════════════════ */
+function IdariIzinModal({yil,ay,mevcut,onSave,onClose}){
+  const dimAy=dim(yil,ay);
+  const [secili,setSecili]=useState(mevcut||[]);
+  
+  const toggle=d=>{
+    if(secili.includes(d)) setSecili(secili.filter(x=>x!==d));
+    else if(secili.length>=3) alert("Maksimum 3 gün seçebilirsiniz.");
+    else setSecili([...secili,d].sort((a,b)=>a-b));
+  };
+  
+  return(
+    <Modal title="🏛️ İdari İzin Ayarları" onClose={onClose} width={500}>
+      <div style={{padding:"12px",background:"#eff6ff",borderRadius:6,marginBottom:16,fontSize:12,color:"#1e3a8a",borderLeft:"4px solid #3b82f6",lineHeight:1.4}}>
+        <strong>Nasıl Uygulanır?</strong><br/>
+        Bu ekrandan seçtiğiniz idari izin günlerinde <strong>ÇALIŞAN</strong> personellerin zorunlu mesai hedefinden otomatik olarak düşüm yapılır:<br/>
+        • <strong>Normal Personel:</strong> 8 saat<br/>
+        • <strong>Yarı Zamanlı:</strong> 4 saat<br/>
+        • <strong>Radyoloji:</strong> 7 saat<br/>
+        • <strong>Arefe Günü:</strong> Tüm gruplar için 5 saat<br/>
+        <em>Not: İdari izin gününde çalışmayan personelin hedefinden düşülmez. Yönetici veya Birim Sorumlusu tarafından düzenlenebilir. En fazla 3 gün seçilebilir.</em>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6,marginBottom:20}}>
+        {Array.from({length:dimAy},(_,i)=>i+1).map(d=>{
+          const isSelected=secili.includes(d);
+          const {t}=dayInfo(yil,ay,d);
+          const isWeekend=t==="hs"||t==="tatil";
+          return(
+            <div key={d} onClick={()=>toggle(d)}
+              style={{
+                padding:"8px 0",textAlign:"center",borderRadius:4,fontSize:13,fontWeight:600,cursor:"pointer",
+                background:isSelected?"#3b82f6":isWeekend?"#f3f4f6":"#fff",
+                color:isSelected?"#fff":isWeekend?"#9ca3af":"#374151",
+                border:`1px solid ${isSelected?"#2563eb":"#d1d5db"}`,
+                boxShadow:isSelected?"0 2px 4px rgba(59,130,246,0.3)":"none",
+                userSelect:"none"
+              }}>
+              {d}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+        <button style={S.btnG} onClick={onClose}>İptal</button>
+        <button style={S.btn} onClick={()=>{onSave(secili);onClose();}}>Kaydet</button>
+      </div>
+    </Modal>
+  );
+}
+
 /* ═══════════════════════════════════════════════
 
 
@@ -1365,6 +1442,7 @@ function PuantajTablosu({state,update,user,yil,ay}){
   const [ciftGunModal,setCiftGunModal]=useState(null); // personel obj
   const [showCiftBakis,setShowCiftBakis]=useState(false);
   const [showAciklama,setShowAciklama]=useState(false);
+  const [showIdariIzin,setShowIdariIzin]=useState(false);
   const [aciklamaForm,setAciklamaForm]=useState("");
   const efBirim=user.rol==="sorumlu"?user.birimId:filtreBirim;
   const days=Array.from({length:dim(yil,ay)},(_,i)=>i+1);
@@ -1381,7 +1459,7 @@ function PuantajTablosu({state,update,user,yil,ay}){
     const row=puantaj[pk(p.id)]||{};
     const mf=manuelFazla[pk(p.id)];
     const cb=cokluBirim[pk(p.id)];
-    const stats=calcRow(row,p.unvan,p.calisma,yil,ay,mf?.deger??null,p);
+    const stats=calcRow(row,p.unvan,p.calisma,yil,ay,mf?.deger??null,p,state.idariIzinler?.[`${yil}_${ay}`]||[]);
     // Çift birim: manuel gün girişine göre zorunlu saat
     if(p.ciftBirim){
       const cbg=ciftBirimGun[pk(p.id)];
@@ -1436,6 +1514,17 @@ function PuantajTablosu({state,update,user,yil,ay}){
               ✍️ {state.imzaYetkilileri?.servisSorumluBirim?.[user.birimId]?"Adım: "+state.imzaYetkilileri.servisSorumluBirim[user.birimId]:"Servis Sorumlu Adım"}
             </button>
           )}
+          {/* [YENİ]: Ay içinde İdari İzin eklendiyse, herkesin görebilmesi için yeşil uyarı metni çıkar. */}
+          {state.idariIzinler?.[`${yil}_${ay}`]?.length>0 && (
+            <span style={{fontSize:11,color:"#059669",background:"#d1fae5",padding:"4px 8px",borderRadius:4,fontWeight:600}}>
+              ✅ Bu ay idari izin uygulandı
+            </span>
+          )}
+          {/* [YENİ]: İdari İzin modalını (ekranını) açan buton */}
+          <button onClick={()=>setShowIdariIzin(true)}
+            style={{background:"#8b5cf6",color:"#fff",border:"none",borderRadius:5,padding:"7px 14px",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center",gap:6}}>
+            🏛️ İdari İzin
+          </button>
           {/* [YENİ]: Kullanıcının puantaja özel not ekleyebilmesi için oluşturulan "Açıklamalar" modülü butonu */}
           <button onClick={()=>{
             const pkA=`${efBirim||"genel"}_${yil}_${ay}`;
@@ -1642,6 +1731,14 @@ function PuantajTablosu({state,update,user,yil,ay}){
           </div>
         </Modal>
       )}
+      {showIdariIzin&&<IdariIzinModal
+        yil={yil} ay={ay}
+        mevcut={state.idariIzinler?.[`${yil}_${ay}`]||[]}
+        onSave={arr=>{
+          update(s=>({...s,idariIzinler:{...(s.idariIzinler||{}),[`${yil}_${ay}`]:arr}}));
+        }}
+        onClose={()=>setShowIdariIzin(false)}
+      />}
     </div>
   );
 }
