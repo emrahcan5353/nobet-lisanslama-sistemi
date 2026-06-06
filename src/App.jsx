@@ -550,7 +550,7 @@ function ayIsGunu(y,m){
  *   *    Cell  → Puantaj hücresi + doğrulama uyarı balonu
  */
 
-function Cell({val,dt,editable,onSave,sutDon,sendika,unvan}){
+function Cell({val,dt,editable,onSave,sutDon,sendika,unvan,prevVal,nextVal}){
   const [ed,setEd]=useState(false);const [inp,setInp]=useState(val||"");const ref=useRef();
   const [warn,setWarn]=useState(null);const warnTimer=useRef(null);
   useEffect(()=>{setInp(val||"");},[val]);
@@ -570,6 +570,32 @@ function Cell({val,dt,editable,onSave,sutDon,sendika,unvan}){
       setInp(val||""); // eski değere dön
       return;
     }
+
+    // Çakışma ve Dinlenme Süresi Kontrolü (Örn: 08-08 sonrası ertesi gün 08-08 yazılamaz)
+    const pvCurrent = parseVal(v);
+    if(pvCurrent && pvCurrent.type === "v"){
+      const pvPrev = parseVal(prevVal);
+      const pvNext = parseVal(nextVal);
+      
+      // Eğer dünkü mesai gece 24'ü geçiyorsa (a >= b) ve bugünkü mesai çıkış saatinden önce/aynı saatte başlıyorsa
+      if(pvPrev && pvPrev.type === "v" && pvPrev.a >= pvPrev.b){
+        if(pvCurrent.a <= pvPrev.b){
+          showWarn(`Hata: Dünkü mesai bugün saat ${pvPrev.b}:00'da bitiyor. Çakışan mesai giremezsiniz!`);
+          setInp(val||"");
+          return;
+        }
+      }
+      
+      // Eğer bugünkü mesai gece 24'ü geçiyorsa (a >= b) ve yarınki mesai ile çakışıyorsa
+      if(pvNext && pvNext.type === "v" && pvCurrent.a >= pvCurrent.b){
+        if(pvNext.a <= pvCurrent.b){
+          showWarn(`Hata: Bu mesai yarın saat ${pvCurrent.b}:00'da bitiyor ve yarınki kayıtla çakışıyor!`);
+          setInp(val||"");
+          return;
+        }
+      }
+    }
+
     onSave(v);
   };
   const pv=parseVal(val);
@@ -744,8 +770,8 @@ function LoginScreen({users,onLogin}){
 function Header({user,tab,setTab,yil,ay,setYil,setAy,onLogout,onSifreDegistir,birimler,appZoom,setAppZoom,unreadCount=0}){
   const [showSifre,setShowSifre]=useState(false);
   const tabs=user.rol==="yonetici"
-    ?[{id:"puantaj",lbl:"📋 Puantaj"},{id:"personel",lbl:"👥 Personel"},{id:"birimler",lbl:"🏥 Birimler"},{id:"kullanicilar",lbl:"🔐 Kullanıcılar"},{id:"mesajlar",lbl:"✉️ Mesajlar",badge:0}]
-    :[{id:"puantaj",lbl:"📋 Puantaj"},{id:"personel",lbl:"👥 Personel"},{id:"mesajlar",lbl:"✉️ Mesajlar",badge:unreadCount}];
+    ?[{id:"puantaj",lbl:"📋 Puantaj"},{id:"dashboard",lbl:"📊 Dashboard"},{id:"personel",lbl:"👥 Personel"},{id:"birimler",lbl:"🏥 Birimler"},{id:"kullanicilar",lbl:"🔐 Kullanıcılar"},{id:"mesajlar",lbl:"✉️ Mesajlar",badge:0}]
+    :[{id:"puantaj",lbl:"📋 Puantaj"},{id:"dashboard",lbl:"📊 Dashboard"},{id:"personel",lbl:"👥 Personel"},{id:"mesajlar",lbl:"✉️ Mesajlar",badge:unreadCount}];
   const birimAd=birimler.find(b=>b.id===user.birimId)?.ad;
   return(
     <div style={{background:"#0f4c81",color:"#fff",fontFamily:"'Segoe UI',system-ui,sans-serif",position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 8px rgba(0,0,0,.25)"}}>
@@ -1679,7 +1705,7 @@ function PuantajTablosu({state,update,user,yil,ay}){
                     </td>
                   )}
                   {days.map(d=>(
-                    <Cell key={d} val={row[d]||""} dt={dayInfo(yil,ay,d).t} editable={canEdit(p)} unvan={p.unvan} onSave={val=>setCell(p.id,d,val)} sutDon={p.calisma==="sut"?getSutDonemi(p,yil,ay,d):null} sendika={isSendikaGunu(p,yil,ay,d)}/>
+                    <Cell key={d} val={row[d]||""} prevVal={row[d-1]||""} nextVal={row[d+1]||""} dt={dayInfo(yil,ay,d).t} editable={canEdit(p)} unvan={p.unvan} onSave={val=>setCell(p.id,d,val)} sutDon={p.calisma==="sut"?getSutDonemi(p,yil,ay,d):null} sendika={isSendikaGunu(p,yil,ay,d)}/>
                   ))}
                   {[
                     {v:stats.cal,bg:rb,hl:false},
@@ -2270,6 +2296,194 @@ function MesajKutusu({state,update,user}){
   );
 }
 
+/* ── Dashboard (Özet Ekranı) ─────────────────────────── */
+function DashboardPaneli({state,user,yil,ay}){
+  const [filtreBirim,setFiltreBirim]=useState("");
+  const efBirim = user.rol==="sorumlu" ? user.birimId : filtreBirim;
+  const filtered = getFiltrelenmisPersonel(state, efBirim, yil, ay);
+  const days = Array.from({length:dim(yil,ay)},(_,i)=>i+1);
+  const birimler = state.birimler||[];
+
+  const puantaj = state.puantaj||{};
+  const manuelFazla = state.manuelFazla||{};
+  const cokluBirim = state.cokluBirim||{};
+  const ciftBirimGun = state.ciftBirimGun||{};
+  const pk = pid => `${pid}_${yil}_${ay}`;
+
+  const statOf = p => {
+    const row = puantaj[pk(p.id)] || {};
+    const mf = manuelFazla[pk(p.id)];
+    const cb = cokluBirim[pk(p.id)];
+    const stats = calcRow(row, p.unvan, p.calisma, yil, ay, mf?.deger ?? null, p, state.idariIzinler?.[`${yil}_${ay}`]||[]);
+    if (p.ciftBirim) {
+      const cbg = ciftBirimGun[pk(p.id)];
+      const zon = cbg ? cbg.hesap : 0;
+      const faz = mf != null ? mf.deger : Math.max(0, stats.cal - zon);
+      return { ...stats, zon, faz: p.calisma === "sut" ? 0 : faz };
+    }
+    if (cb && cb.length > 0) {
+      const cbZ = calcCokluZorunlu(p.unvan, p.calisma, cb);
+      if (cbZ != null) {
+        const faz = mf != null ? mf.deger : Math.max(0, stats.cal - cbZ);
+        return { ...stats, zon: cbZ, faz: p.calisma === "sut" ? 0 : faz };
+      }
+    }
+    return stats;
+  };
+
+  let totalYI = 0, totalR = 0, totalDiger = 0;
+  let totalCal = 0, totalFaz = 0;
+  const personelIzinler = [];
+  const fazlaCalisanlar = [];
+
+  filtered.forEach(p => {
+    const row = puantaj[pk(p.id)] || {};
+    let yi=0, r=0, diger=0;
+    
+    for(let d=1; d<=days.length; d++){
+      const pv = parseVal(row[d]);
+      if(pv && pv.type==="izin"){
+        if(pv.kod==="Yİ") yi++;
+        else if(pv.kod==="R") r++;
+        else diger++;
+      }
+    }
+    
+    totalYI += yi;
+    totalR += r;
+    totalDiger += diger;
+
+    if(yi>0 || r>0 || diger>0) {
+      personelIzinler.push({ad: p.ad, unvan: p.unvan, birim: birimler.find(b=>b.id===p.birimId)?.ad, yi, r, diger});
+    }
+
+    const s = statOf(p);
+    totalCal += s.cal;
+    totalFaz += s.faz;
+
+    if(s.faz > 0) {
+      fazlaCalisanlar.push({ad: p.ad, unvan: p.unvan, birim: birimler.find(b=>b.id===p.birimId)?.ad, cal: s.cal, zon: s.zon, faz: s.faz});
+    }
+  });
+
+  const ortalamaCal = filtered.length > 0 ? (totalCal / filtered.length).toFixed(1) : 0;
+  const ortalamaFaz = filtered.length > 0 ? (totalFaz / filtered.length).toFixed(1) : 0;
+
+  return (
+    <div style={{padding:20,fontFamily:"'Segoe UI',system-ui,sans-serif",display:"flex",flexDirection:"column",height:"100%",boxSizing:"border-box",overflow:"auto"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20,flexWrap:"wrap",gap:8}}>
+        <div>
+          <h2 style={{margin:0,fontSize:20,color:"#0f4c81",fontWeight:800}}>📊 Dashboard</h2>
+          <div style={{fontSize:13,color:"#6b7280",marginTop:4}}>{AYLAR[ay]} {yil} İstatistikleri</div>
+        </div>
+        {user.rol==="yonetici" && (
+          <select value={filtreBirim} onChange={e=>setFiltreBirim(e.target.value)} style={{...S.inp,width:200}}>
+            <option value="">Tüm Birimler</option>
+            {birimler.map(b=><option key={b.id} value={b.id}>{b.ad}</option>)}
+          </select>
+        )}
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(200px, 1fr))",gap:16,marginBottom:24}}>
+        <div style={{background:"#fff",padding:20,borderRadius:10,boxShadow:"0 2px 6px rgba(0,0,0,.04)",borderLeft:"4px solid #3b82f6",display:"flex",flexDirection:"column"}}>
+          <span style={{fontSize:13,color:"#6b7280",fontWeight:600}}>Personel Sayısı</span>
+          <span style={{fontSize:28,color:"#1e40af",fontWeight:800,marginTop:6}}>{filtered.length}</span>
+        </div>
+        <div style={{background:"#fff",padding:20,borderRadius:10,boxShadow:"0 2px 6px rgba(0,0,0,.04)",borderLeft:"4px solid #8b5cf6",display:"flex",flexDirection:"column"}}>
+          <span style={{fontSize:13,color:"#6b7280",fontWeight:600}}>Ortalama Çalışma Saati</span>
+          <span style={{fontSize:28,color:"#5b21b6",fontWeight:800,marginTop:6}}>{ortalamaCal} Saat</span>
+        </div>
+        <div style={{background:"#fff",padding:20,borderRadius:10,boxShadow:"0 2px 6px rgba(0,0,0,.04)",borderLeft:"4px solid #f97316",display:"flex",flexDirection:"column"}}>
+          <span style={{fontSize:13,color:"#6b7280",fontWeight:600}}>Ortalama Fazla Mesai</span>
+          <span style={{fontSize:28,color:"#c2410c",fontWeight:800,marginTop:6}}>{ortalamaFaz} Saat</span>
+        </div>
+        <div style={{background:"#fff",padding:20,borderRadius:10,boxShadow:"0 2px 6px rgba(0,0,0,.04)",borderLeft:"4px solid #10b981",display:"flex",flexDirection:"column"}}>
+          <span style={{fontSize:13,color:"#6b7280",fontWeight:600}}>Toplam Yıllık İzin (Yİ)</span>
+          <span style={{fontSize:28,color:"#065f46",fontWeight:800,marginTop:6}}>{totalYI} Gün</span>
+        </div>
+        <div style={{background:"#fff",padding:20,borderRadius:10,boxShadow:"0 2px 6px rgba(0,0,0,.04)",borderLeft:"4px solid #ef4444",display:"flex",flexDirection:"column"}}>
+          <span style={{fontSize:13,color:"#6b7280",fontWeight:600}}>Toplam Rapor (R)</span>
+          <span style={{fontSize:28,color:"#991b1b",fontWeight:800,marginTop:6}}>{totalR} Gün</span>
+        </div>
+        <div style={{background:"#fff",padding:20,borderRadius:10,boxShadow:"0 2px 6px rgba(0,0,0,.04)",borderLeft:"4px solid #f59e0b",display:"flex",flexDirection:"column"}}>
+          <span style={{fontSize:13,color:"#6b7280",fontWeight:600}}>Diğer İzinler</span>
+          <span style={{fontSize:28,color:"#92400e",fontWeight:800,marginTop:6}}>{totalDiger} Gün</span>
+        </div>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(300px, 1fr))",gap:20}}>
+        <div>
+          <h3 style={{fontSize:16,color:"#374151",marginBottom:12,fontWeight:700}}>📋 Bu Ay İzin Kullananlar</h3>
+          <div style={{background:"#fff",borderRadius:10,boxShadow:"0 1px 4px rgba(0,0,0,.06)",overflow:"hidden",border:"1px solid #e5e7eb"}}>
+            {personelIzinler.length === 0 ? (
+              <div style={{padding:20,textAlign:"center",color:"#6b7280",fontSize:14}}>Bu ay için kayıtlı izin bulunmamaktadır.</div>
+            ) : (
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                <thead>
+                  <tr style={{background:"#f8fafc",borderBottom:"1px solid #e5e7eb"}}>
+                    <th style={{padding:"12px 16px",textAlign:"left",color:"#475569",fontWeight:600}}>Personel</th>
+                    {user.rol==="yonetici" && <th style={{padding:"12px 16px",textAlign:"left",color:"#475569",fontWeight:600}}>Birim</th>}
+                    <th style={{padding:"12px 16px",textAlign:"center",color:"#475569",fontWeight:600}}>Yİ</th>
+                    <th style={{padding:"12px 16px",textAlign:"center",color:"#475569",fontWeight:600}}>R</th>
+                    <th style={{padding:"12px 16px",textAlign:"center",color:"#475569",fontWeight:600}}>Mİ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {personelIzinler.map((pi,i)=>(
+                    <tr key={i} style={{borderBottom:"1px solid #f1f5f9",background:i%2===0?"#fff":"#fafafa"}}>
+                      <td style={{padding:"10px 16px"}}>
+                        <div style={{fontWeight:700,color:"#1e293b"}}>{pi.ad}</div>
+                        <div style={{fontSize:11,color:"#64748b"}}>{pi.unvan}</div>
+                      </td>
+                      {user.rol==="yonetici" && <td style={{padding:"10px 16px",color:"#475569"}}>{pi.birim}</td>}
+                      <td style={{padding:"10px 16px",textAlign:"center",fontWeight:pi.yi>0?700:400,color:pi.yi>0?"#10b981":"#cbd5e1"}}>{pi.yi || "-"}</td>
+                      <td style={{padding:"10px 16px",textAlign:"center",fontWeight:pi.r>0?700:400,color:pi.r>0?"#ef4444":"#cbd5e1"}}>{pi.r || "-"}</td>
+                      <td style={{padding:"10px 16px",textAlign:"center",fontWeight:pi.diger>0?700:400,color:pi.diger>0?"#f59e0b":"#cbd5e1"}}>{pi.diger || "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <h3 style={{fontSize:16,color:"#374151",marginBottom:12,fontWeight:700}}>⏱️ Fazla Mesai Yapanlar</h3>
+          <div style={{background:"#fff",borderRadius:10,boxShadow:"0 1px 4px rgba(0,0,0,.06)",overflow:"hidden",border:"1px solid #e5e7eb"}}>
+            {fazlaCalisanlar.length === 0 ? (
+              <div style={{padding:20,textAlign:"center",color:"#6b7280",fontSize:14}}>Fazla mesai yapan personel bulunmamaktadır.</div>
+            ) : (
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+                <thead>
+                  <tr style={{background:"#f8fafc",borderBottom:"1px solid #e5e7eb"}}>
+                    <th style={{padding:"12px 16px",textAlign:"left",color:"#475569",fontWeight:600}}>Personel</th>
+                    {user.rol==="yonetici" && <th style={{padding:"12px 16px",textAlign:"left",color:"#475569",fontWeight:600}}>Birim</th>}
+                    <th style={{padding:"12px 16px",textAlign:"center",color:"#475569",fontWeight:600}}>Çalışma</th>
+                    <th style={{padding:"12px 16px",textAlign:"center",color:"#475569",fontWeight:600}}>Fazla</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fazlaCalisanlar.sort((a,b)=>b.faz-a.faz).map((fz,i)=>(
+                    <tr key={i} style={{borderBottom:"1px solid #f1f5f9",background:i%2===0?"#fff":"#fafafa"}}>
+                      <td style={{padding:"10px 16px"}}>
+                        <div style={{fontWeight:700,color:"#1e293b"}}>{fz.ad}</div>
+                        <div style={{fontSize:11,color:"#64748b"}}>{fz.unvan}</div>
+                      </td>
+                      {user.rol==="yonetici" && <td style={{padding:"10px 16px",color:"#475569"}}>{fz.birim}</td>}
+                      <td style={{padding:"10px 16px",textAlign:"center",color:"#475569"}}>{fz.cal}</td>
+                      <td style={{padding:"10px 16px",textAlign:"center",fontWeight:700,color:"#ea580c"}}>+{fz.faz}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 /* ═══════════════════════════════════════════════
 
@@ -2381,6 +2595,7 @@ export default function App(){
         unreadCount={unreadCount}/>
       <div className="print-reset" style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}>
         {tab==="puantaj"&&<PuantajTablosu {...props}/>}
+        {tab==="dashboard"&&<DashboardPaneli {...props}/>}
         {tab==="personel"&&<PersonelYonetimi {...props}/>}
         {tab==="birimler"&&user.rol==="yonetici"&&<BirimlerYonetimi {...props}/>}
         {tab==="kullanicilar"&&user.rol==="yonetici"&&<KullanicilarYonetimi {...props}/>}
