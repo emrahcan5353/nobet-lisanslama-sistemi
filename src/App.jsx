@@ -66,17 +66,18 @@ const TATILLER = {
 };
 /* ── 1b — İzin Kodları ────────────────────────────────────── */
 /* 🔧 Yeni kod: IZIN_LIST + IZIN_AD ikisine birden ekle        */
-const IZIN_LIST = ["Yİ","R","Nİ","Mİ","RG","E","ANİ","Bİ","Öİ","ASİ","İİ","Üİ","X"];
+const IZIN_LIST = ["Yİ","R","Nİ","Mİ","RG","E","ANİ","Bİ","Öİ","ASİ","İİ","Üİ","SUA","X"];
 const IZIN_AD = {
   "Yİ":"Yıllık İzin","R":"Rapor","Nİ":"Nikah İzni","Mİ":"Mazeret İzni",
   "RG":"Resmi Görevli","E":"Eğitim İzni","ANİ":"Analık İzni",
   "Bİ":"Babalık İzni","Öİ":"Ölüm İzni","ASİ":"Askerlik İzni",
-  "İİ":"İdari İzin","Üİ":"Ücretsiz İzin","X":"Birimde Yok"
+  "İİ":"İdari İzin","Üİ":"Ücretsiz İzin","SUA":"Şua İzni","X":"Birimde Yok"
 };
 /* ── 1c — Genel Sabitler (Aylar, Unvanlar, Renkler) ───────── */
 /* 🔧 Birim renkleri → BRENK dizisi (8 renk, döngüsel)         */
 const AYLAR=["","Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
-const GK=["Pz","Pt","Sa","Ça","Pe","Cu","Ct"];
+// [AÇIKLAMA]: Tabloda gösterilen gün isimlerinin 3 harfli kısaltmaları (0=Pazar, 1=Pazartesi... şeklinde sıralanır)
+const GK=["Pzr","Pzt","Sal","Çar","Per","Cum","Cts"];
 const UNVAN_AD={hemsire:"Hemşire",ebe:"Ebe",radyoloji:"Rad.Teknikeri",anestezi:"Anes.Teknikeri"};
 const CALISMA_AD={tam:"Tam Zamanlı",yari:"Yarı Zamanlı",sut:"Süt İzni"};
 const BRENK=["#0ea5e9","#10b981","#f59e0b","#8b5cf6","#ef4444","#ec4899","#14b8a6","#f97316"];
@@ -94,8 +95,8 @@ const GEBELIK={
 // Süt izni dönem renkleri
 const SUT_RENK={
   analik:{bg:"#f3e8ff",bdr:"#d8b4fe",lbl:"Analık İzni"},
-  sut1:  {bg:"#fef9c3",bdr:"#fde047",lbl:"Süt İzni 1.Dönem (3s)"},
-  sut2:  {bg:"#fed7aa",bdr:"#fb923c",lbl:"Süt İzni 2.Dönem (1.5s)"},
+  sut1:  {bg:"#dbeafe",bdr:"#93c5fd",lbl:"Süt İzni 1.Dönem (3s)"},
+  sut2:  {bg:"#dcfce7",bdr:"#86efac",lbl:"Süt İzni 2.Dönem (1.5s)"},
 };
 
 
@@ -112,7 +113,7 @@ const INIT={
     {id:"u1",ad:"Dahiliye Sorumlusu",user:"dahiliye",pass:"123456",rol:"sorumlu",birimId:"b1"},
   ],
   birimler:[{id:"b1",ad:"Dahiliye"},{id:"b2",ad:"Cerrahi"},{id:"b3",ad:"Radyoloji"}],
-  personeller:[],puantaj:{},cokluBirim:{},manuelFazla:{},
+  personeller:[],aylikListe:{},puantaj:{},cokluBirim:{},manuelFazla:{},mesajlar:[],sonOkumaZamani:{},
   imzaYetkilileri:{
     servisSorumluBirim:{},
     birimSorumlu:"",
@@ -138,6 +139,51 @@ const S={
   btnR:{backgroundColor:"#dc2626",color:"#fff",border:"none",borderRadius:5,padding:"6px 12px",cursor:"pointer",fontSize:12},
   btnGrn:{backgroundColor:"#059669",color:"#fff",border:"none",borderRadius:5,padding:"8px 18px",cursor:"pointer",fontSize:13,fontWeight:600},
 };
+
+/* ╔══════════════════════════════════════════════════════════════╗
+ * ║  [AÇIKLAMA]: AYLIK PERSONEL LİSTESİ (TRANSFER SİSTEMİ)      ║
+ * ╠══════════════════════════════════════════════════════════════╣
+ * ║  Eskiden personellerin sadece genel bir "birimId" değeri    ║
+ * ║  vardı. Artık geçmiş listelerin bozulmaması için            ║
+ * ║  her birimin o ayki personel listesi state.aylikListe       ║
+ * ║  içinde ["BirimId_Yıl_Ay" = [p1, p2]] olarak tutulur.       ║
+ * ║  Eğer o ay için bir liste yoksa, otomatik olarak personelin ║
+ * ║  orijinal birimine bakılır.                                 ║
+ * ╚══════════════════════════════════════════════════════════════╝ */
+// --- AYLIK LİSTE (ROSTER) YARDIMCILARI ---
+const getBirimPersonelleri = (state, birimId, yil, ay) => {
+  if(!birimId) return state.personeller; // fallback (tüm birimler)
+  const aylik = state.aylikListe?.[`${birimId}_${yil}_${ay}`];
+  if (aylik) return state.personeller.filter(p => aylik.includes(p.id));
+  return state.personeller.filter(p => p.birimId === birimId);
+};
+
+const getPersonelBirimId = (state, pid, yil, ay) => {
+  const p = state.personeller.find(x => x.id === pid);
+  if (!p) return null;
+  // Fallback: check explicitly if they are in any unit's list for this month
+  for (let b of state.birimler) {
+    const list = state.aylikListe?.[`${b.id}_${yil}_${ay}`];
+    if (list && list.includes(pid)) return b.id;
+  }
+  return p.birimId; // default
+};
+
+const getFiltrelenmisPersonel = (state, efBirim, yil, ay) => {
+  if (efBirim) {
+    return getBirimPersonelleri(state, efBirim, yil, ay);
+  }
+  // Tüm birimler seçiliyse, tüm birimlerin o ayki listelerini birleştir
+  const result = [];
+  const added = new Set();
+  state.birimler.forEach(b => {
+    getBirimPersonelleri(state, b.id, yil, ay).forEach(p => {
+      if (!added.has(p.id)) { added.add(p.id); result.push(p); }
+    });
+  });
+  return result;
+};
+// ----------------------------------------
 
 function Modal({title,onClose,children,width=480}){
   return(
@@ -210,14 +256,19 @@ function parseVal(v){
 
 /* ── 4d — Giriş Doğrulama ───────────────────────────────── */
 /* 🔧 Hatalı giriş tipleri ve öneri mesajları buradan düzenlenir */
-function validateInput(v){
+function validateInput(v, unvan){
   if(!v||!v.trim()) return {ok:true};
   const s=v.trim();
   const up=s.toUpperCase();
 
   // İzin kodu kontrolü
   for(const k of IZIN_LIST){
-    if(up===k.toUpperCase()) return {ok:true};
+    if(up===k.toUpperCase()){
+      if(k==="SUA" && unvan!=="radyoloji"){
+        return {ok:false, msg:"ŞUA izni sadece radyoloji çalışanlarına girilebilir."};
+      }
+      return {ok:true};
+    }
   }
 
   // Yaygın Türkçe izin yazımı önerileri
@@ -230,7 +281,7 @@ function validateInput(v){
     "ASKER":"ASİ","ASKERLİK":"ASİ","ASKERI":"ASİ","ASI":"ASİ",
     "IDARI":"İİ","İDARİ":"İİ","II":"İİ","İI":"İİ",
     "UCRETSIZ":"Üİ","ÜCRETSİZ":"Üİ","UI":"Üİ","ÜI":"Üİ",
-    "RESMI":"RG","RESMİ":"RG",
+    "RESMI":"RG","RESMİ":"RG","ŞUA":"SUA"
   };
   if(ONERI[up]) return {ok:false,msg:`"${s}" geçersiz. Rapor için → `+ONERI[up],oneri:ONERI[up]};
 
@@ -299,6 +350,10 @@ function fmtTarih(dateObj){
   return dateObj.toLocaleDateString("tr-TR",{day:"2-digit",month:"2-digit",year:"numeric"});
 }
 
+/* [AÇIKLAMA]: Hamile/yeni doğum yapmış personelin süt izni dönemlerini hesaplar.
+ * Personelin 'İzne Ayrılış Tarihi'ne ve 'Gebelik Tipi'ne göre; analık izni (genelde 16hf), 
+ * Süt 1. Dönem (ilk 6 ay - 3 saat) ve Süt 2. Dönem (ikinci 6 ay - 1.5 saat) başlangıç/bitiş tarihlerini belirler.
+ * Bu tarihler daha sonra 'zorunlu' çalışma saati hedefinden düşülürken kullanılır. */
 function sutOzet(p){
   if(!p.sutBaslangic) return null;
   const bas=new Date(p.sutBaslangic);
@@ -394,20 +449,76 @@ function zorunlu(unvan,calisma,y,m,izinSet=new Set(),personel=null,row=null,idar
   return Math.max(0,sum);
 }
 
+/* ── 4h — Artırımlı (Bayram) Mesaisi Hesabı ─────────────── */
+/* 
+ * [AÇIKLAMA]: Bu fonksiyon, verilen tarihteki nöbet saatlerinin (a ve b), 
+ * artırımlı mesai ödenen resmi ve dini bayramlara denk gelip gelmediğini hesaplar.
+ * - Ramazan Bayramı, Kurban Bayramı, 29 Ekim, 23 Nisan ve 30 Ağustos artırımlı günlerdir.
+ * - Eğer tatil "Arefe" (tatil.t === "arefe") ise, mesai sadece saat 13:00'ten sonra başlarsa artırımlı sayılır.
+ * - Nöbet gece yarısını geçiyorsa (isNextDay), iki güne bölünerek her günün tatil durumuna ayrı ayrı bakılır.
+ */
+function calcArtirimli(y, m, d, a, b) {
+  if (a == null || b == null) return 0;
+  let totalArtirimli = 0;
+  const isNextDay = a >= b && !(a === 0 && b === 0);
+  const segments = [];
+  if (isNextDay) {
+    segments.push({ date: new Date(y, m - 1, d), start: a, end: 24 });
+    const nextDate = new Date(y, m - 1, d + 1);
+    segments.push({ date: nextDate, start: 0, end: b });
+  } else {
+    segments.push({ date: new Date(y, m - 1, d), start: a, end: b });
+  }
+  for (const seg of segments) {
+    const sy = seg.date.getFullYear();
+    const sm = seg.date.getMonth() + 1;
+    const sd = seg.date.getDate();
+    const k = dk(sy, sm, sd);
+    const tatil = TATILLER[k];
+    if (!tatil) continue;
+    const n = tatil.n.toLowerCase();
+    const isArtirimli = n.includes("ramazan") || n.includes("kurban") || n.includes("cumhuriyet") || n.includes("23 nisan") || n.includes("30 ağustos");
+    if (!isArtirimli) continue;
+    let overlapStart = seg.start;
+    let overlapEnd = seg.end;
+    if (tatil.t === "arefe") {
+      overlapStart = Math.max(overlapStart, 13);
+    }
+    if (overlapEnd > overlapStart) {
+      totalArtirimli += (overlapEnd - overlapStart);
+    }
+  }
+  return totalArtirimli;
+}
+
+/* [AÇIKLAMA]: Personelin seçili aydaki toplam nöbet (çalışma) saati ve gece mesailerini hesaplar.
+ * İzinli günleri atlar, personelin tutması gereken hedef saati 'zorunlu()' fonksiyonundan alır.
+ * Sonra gerçekleşen nöbet saatiyle hedefi kıyaslayarak fazla mesai (faz), gündüz/gece mesai (gnM, gM) gibi özet verileri çıkarır. */
 function calcRow(row,unvan,calisma,y,m,mf,personel=null,idariIzinlerArr=[]){
-  const total=dim(y,m); let cal=0,gece=0;
+  const total=dim(y,m); let cal=0,gece=0,artMesai=0;
   const izinSet=new Set();
   for(let d=1;d<=total;d++){
     const pv=parseVal(row?.[d]);
     if(!pv) continue;
     if(pv.type==="izin") izinSet.add(d);
-    else{cal+=pv.saat;gece+=nightH(pv.a,pv.b);}
+    else{
+      cal+=pv.saat;
+      gece+=nightH(pv.a,pv.b);
+      artMesai+=calcArtirimli(y,m,d,pv.a,pv.b);
+    }
   }
   const zon=zorunlu(unvan,calisma,y,m,izinSet,personel,row,idariIzinlerArr);
   const faz=mf!=null?mf:Math.max(0,cal-zon);
+  
+  /* YASAL KURAL: Bayram günlerinde çalışılan saatler, ancak kişinin o ay içerisindeki 
+   * toplam mesaisi aylık yasal süreyi (zon) aşmışsa (yani fazla mesaisi varsa) artırımlı ödenir. 
+   * Ay toplamında fazla mesai yoksa (faz=0), bayram farkı ödemesi (gecerliArtMesai) sıfır olur.
+   * Eğer fazla mesai varsa, bayram mesaisi toplam fazla mesai limitini aşamaz (Math.min). */
+  const gecerliArtMesai=calisma!=="sut"&&faz>0?Math.min(artMesai,faz):0;
+  
   const gM=calisma!=="sut"&&faz>0?Math.min(gece,faz):0;
   const gnM=calisma!=="sut"&&faz>0?faz-gM:0;
-  return{cal,zon,gece,gM,gnM,faz:calisma==="sut"?0:faz};
+  return{cal,zon,gece,gM,gnM,faz:calisma==="sut"?0:faz,artMesai:gecerliArtMesai};
 }
 
 function calcCokluZorunlu(unvan,calisma,al){
@@ -439,7 +550,7 @@ function ayIsGunu(y,m){
  *   *    Cell  → Puantaj hücresi + doğrulama uyarı balonu
  */
 
-function Cell({val,dt,editable,onSave,sutDon,sendika}){
+function Cell({val,dt,editable,onSave,sutDon,sendika,unvan}){
   const [ed,setEd]=useState(false);const [inp,setInp]=useState(val||"");const ref=useRef();
   const [warn,setWarn]=useState(null);const warnTimer=useRef(null);
   useEffect(()=>{setInp(val||"");},[val]);
@@ -453,7 +564,7 @@ function Cell({val,dt,editable,onSave,sutDon,sendika}){
     const v=inp.trim();
     setEd(false);
     if(!v){onSave(null);return;}
-    const chk=validateInput(v);
+    const chk=validateInput(v, unvan);
     if(!chk.ok){
       showWarn(chk.msg);
       setInp(val||""); // eski değere dön
@@ -630,11 +741,11 @@ function LoginScreen({users,onLogin}){
 /* 🔧 Yıl seçenekleri → [2025, 2026, 2027] */
 /* HEADER
 ═══════════════════════════════════════════════ */
-function Header({user,tab,setTab,yil,ay,setYil,setAy,onLogout,onSifreDegistir,birimler}){
+function Header({user,tab,setTab,yil,ay,setYil,setAy,onLogout,onSifreDegistir,birimler,appZoom,setAppZoom,unreadCount=0}){
   const [showSifre,setShowSifre]=useState(false);
   const tabs=user.rol==="yonetici"
-    ?[{id:"puantaj",lbl:"📋 Puantaj"},{id:"personel",lbl:"👥 Personel"},{id:"birimler",lbl:"🏥 Birimler"},{id:"kullanicilar",lbl:"🔐 Kullanıcılar"}]
-    :[{id:"puantaj",lbl:"📋 Puantaj"},{id:"personel",lbl:"👥 Personel"}];
+    ?[{id:"puantaj",lbl:"📋 Puantaj"},{id:"personel",lbl:"👥 Personel"},{id:"birimler",lbl:"🏥 Birimler"},{id:"kullanicilar",lbl:"🔐 Kullanıcılar"},{id:"mesajlar",lbl:"✉️ Mesajlar",badge:0}]
+    :[{id:"puantaj",lbl:"📋 Puantaj"},{id:"personel",lbl:"👥 Personel"},{id:"mesajlar",lbl:"✉️ Mesajlar",badge:unreadCount}];
   const birimAd=birimler.find(b=>b.id===user.birimId)?.ad;
   return(
     <div style={{background:"#0f4c81",color:"#fff",fontFamily:"'Segoe UI',system-ui,sans-serif",position:"sticky",top:0,zIndex:100,boxShadow:"0 2px 8px rgba(0,0,0,.25)"}}>
@@ -654,6 +765,11 @@ function Header({user,tab,setTab,yil,ay,setYil,setAy,onLogout,onSifreDegistir,bi
           <select value={yil} onChange={e=>setYil(+e.target.value)} style={{background:"rgba(255,255,255,.15)",color:"#fff",border:"1px solid rgba(255,255,255,.3)",borderRadius:5,padding:"5px 8px",fontSize:12,cursor:"pointer"}}>
             {[2025,2026,2027].map(y=><option key={y} value={y} style={{color:"#000"}}>{y}</option>)}
           </select>
+          <div style={{display:"flex",alignItems:"center",background:"rgba(0,0,0,.15)",borderRadius:5,padding:"2px",gap:2,marginRight:8}}>
+            <button onClick={()=>setAppZoom(z=>Math.max(40,z-5))} title="Uzaklaştır (-)" style={{background:"transparent",border:"none",color:"#fff",cursor:"pointer",padding:"3px 8px",fontSize:14,fontWeight:800}}>-</button>
+            <span style={{fontSize:11,fontWeight:600,padding:"0 4px",minWidth:36,textAlign:"center"}} title="Görünüm Boyutu">%{appZoom}</span>
+            <button onClick={()=>setAppZoom(z=>Math.min(150,z+5))} title="Yakınlaştır (+)" style={{background:"transparent",border:"none",color:"#fff",cursor:"pointer",padding:"3px 8px",fontSize:14,fontWeight:800}}>+</button>
+          </div>
           <button onClick={()=>setShowSifre(true)} title="Şifre Değiştir"
             style={{background:"rgba(255,255,255,.15)",color:"#fff",border:"1px solid rgba(255,255,255,.3)",borderRadius:5,padding:"5px 12px",cursor:"pointer",fontSize:12}}>
             🔑 Şifre
@@ -664,8 +780,9 @@ function Header({user,tab,setTab,yil,ay,setYil,setAy,onLogout,onSifreDegistir,bi
       </div>
       <div style={{display:"flex",paddingLeft:16}}>
         {tabs.map(t=>(
-          <button key={t.id} onClick={()=>setTab(t.id)} style={{background:tab===t.id?"rgba(255,255,255,.18)":"transparent",color:"#fff",border:"none",borderBottom:tab===t.id?"3px solid #7dd3fc":"3px solid transparent",padding:"9px 18px",cursor:"pointer",fontSize:13,fontWeight:tab===t.id?700:400,transition:"all .15s"}}>
+          <button key={t.id} onClick={()=>setTab(t.id)} style={{background:tab===t.id?"rgba(255,255,255,.18)":"transparent",color:"#fff",border:"none",borderBottom:tab===t.id?"3px solid #7dd3fc":"3px solid transparent",padding:"9px 18px",cursor:"pointer",fontSize:13,fontWeight:tab===t.id?700:400,transition:"all .15s",display:"flex",alignItems:"center",gap:6}}>
             {t.lbl}
+            {t.badge > 0 && <span style={{background:"#ef4444",color:"#fff",borderRadius:"10px",padding:"2px 6px",fontSize:10,fontWeight:800}}>{t.badge}</span>}
           </button>
         ))}
       </div>
@@ -830,12 +947,13 @@ const PRINT_CSS = `
   .puantaj-page:not(:first-child) { page-break-before: always; }
   /* Siyah-beyaz net renkler */
   .bw-tatil { background: #f5c8c8 !important; color: #000 !important; }
-  .bw-arefe { background: #aaa !important; color: #000 !important; }
-  .bw-hafta { background: #ccc !important; color: #000 !important; }
-  .bw-sendika { background: #ddd !important; background-image: repeating-linear-gradient(45deg, #777 0, #777 1px, transparent 0, transparent 4px) !important; color: #000 !important; }
-  .bw-analik { background: #e8e8e8 !important; color: #000 !important; }
-  .bw-sut1 { background: #d0d0d0 !important; color: #000 !important; }
-  .bw-sut2 { background: #b8b8b8 !important; color: #000 !important; }
+  .bw-arefe { background: #eeeeee !important; color: #000 !important; }
+  .bw-hafta { background: #d9d9d9 !important; color: #000 !important; }
+  .bw-tatil { background: #d9d9d9 !important; color: #000 !important; }
+  .bw-sendika { background: #e5e5e5 !important; background-image: repeating-linear-gradient(45deg, #999 0, #999 1px, transparent 0, transparent 4px) !important; color: #000 !important; }
+  .bw-analik { background: #f5f5f5 !important; color: #000 !important; }
+  .bw-sut1 { background: #ebebeb !important; color: #000 !important; }
+  .bw-sut2 { background: #e0e0e0 !important; color: #000 !important; }
   /* Çıktı Alırken Kırpılmayı (Tek Sayfada Sıkışmayı) Önleyen Stiller */
   .print-reset { overflow: visible !important; height: auto !important; max-height: none !important; display: block !important; position: static !important; }
 }
@@ -844,16 +962,18 @@ const PRINT_CSS = `
 // Siyah-Beyaz uyumlu gri tonlar (açıktan koyuya)
 const BW = {
   normal:   {bg:"#ffffff", bdr:"#000", text:"#000"},  // Beyaz
-  analik:   {bg:"#f0f0f0", bdr:"#000", text:"#000"},  // Çok açık gri
-  sut1:     {bg:"#c8d8f0", bdr:"#000", text:"#000"},  // Açık mavi-gri (ilk 6 ay)
-  sendika:  {bg:"#d8d8d8", bdr:"#000", text:"#000"},  // Çizgili gri
-  sut2:     {bg:"#b8d8b8", bdr:"#000", text:"#000"},  // Açık yeşil-gri (ikinci 6 ay)
-  hafta:    {bg:"#bbbbbb", bdr:"#000", text:"#000"},  // Orta gri
-  arefe:    {bg:"#c8c8c8", bdr:"#000", text:"#000"},  // Açık gri (cts/pazardan açık)
-  tatil:    {bg:"#f5c8c8", bdr:"#000", text:"#000"},  // Çok açık kırmızı — siyah yazı
+  analik:   {bg:"#f5f5f5", bdr:"#000", text:"#000"},  // Çok açık gri
+  sut1:     {bg:"#ebebeb", bdr:"#000", text:"#000"},  // Açık gri (ilk 6 ay)
+  sendika:  {bg:"#e5e5e5", bdr:"#000", text:"#000"},  // Çizgili gri
+  sut2:     {bg:"#e0e0e0", bdr:"#000", text:"#000"},  // Orta-açık gri (ikinci 6 ay)
+  hafta:    {bg:"#d9d9d9", bdr:"#000", text:"#000"},  // Belirgin gri (Hafta sonu)
+  arefe:    {bg:"#eeeeee", bdr:"#000", text:"#000"},  // Hafta sonundan 1-2 ton açık gri
+  tatil:    {bg:"#d9d9d9", bdr:"#000", text:"#000"},  // Belirgin gri (Resmi tatil)
 };
 
 function PrintView({state,user,yil,ay,filtreBirim,onClose}){
+  const [printBayram,setPrintBayram]=useState(false);
+  const [printGereken,setPrintGereken]=useState(true);
   const personeller=state.personeller||[];
   const birimler=state.birimler||[];
   const puantaj=state.puantaj||{};
@@ -861,7 +981,7 @@ function PrintView({state,user,yil,ay,filtreBirim,onClose}){
   const cokluBirim=state.cokluBirim||{};
   const ciftBirimGun=state.ciftBirimGun||{};
   const efBirim=user.rol==="sorumlu"?user.birimId:(filtreBirim||"");
-  const filtered=personeller.filter(p=>!efBirim||p.birimId===efBirim);
+  const filtered=getFiltrelenmisPersonel(state, efBirim, yil, ay);
   const days=Array.from({length:dim(yil,ay)},(_,i)=>i+1);
   const pk=pid=>`${pid}_${yil}_${ay}`;
   const bAd=id=>birimler.find(b=>b.id===id)?.ad||"";
@@ -970,9 +1090,12 @@ function PrintView({state,user,yil,ay,filtreBirim,onClose}){
                   </th>
                 );
               })}
-              {["Çlş\nSaati","Gece\nMesai","Gündüz\nMesai","Fazla\nMesai","Çlş.\nGereken"].map(h=>(
+              {["Çlş\nSaati","Gece\nMesai","Gündüz\nMesai"].map(h=>(
                 <th key={h} style={{padding:"3px 3px",textAlign:"center",width:34,minWidth:34,border:"2px solid #000",fontSize:7,whiteSpace:"pre-line",lineHeight:1.2,background:"#fff",color:"#000",fontWeight:800}}>{h}</th>
               ))}
+              {printBayram && <th style={{padding:"3px 3px",textAlign:"center",width:34,minWidth:34,border:"2px solid #000",fontSize:7,whiteSpace:"pre-line",lineHeight:1.2,background:"#fff",color:"#000",fontWeight:800}}>Bayram<br/>Mesaisi</th>}
+              <th style={{padding:"3px 3px",textAlign:"center",width:34,minWidth:34,border:"2px solid #000",fontSize:7,whiteSpace:"pre-line",lineHeight:1.2,background:"#fff",color:"#000",fontWeight:800}}>Fazla<br/>Mesai</th>
+              {printGereken && <th style={{padding:"3px 3px",textAlign:"center",width:34,minWidth:34,border:"2px solid #000",fontSize:7,whiteSpace:"pre-line",lineHeight:1.2,background:"#fff",color:"#000",fontWeight:800}}>Çlş.<br/>Gereken</th>}
             </tr>
           </thead>
           <tbody>
@@ -1001,12 +1124,13 @@ function PrintView({state,user,yil,ay,filtreBirim,onClose}){
                     );
                   })}
                   {[
-                    {v:stats.cal,bg:"#fff",fw:600},
-                    {v:stats.gM,bg:"#e8e8e8",fw:500},
-                    {v:stats.gnM,bg:"#e8e8e8",fw:500},
-                    {v:stats.faz,bg:stats.faz>0?"#bbb":"#fff",fw:700},
-                    {v:stats.zon,bg:"#ddd",fw:700,bdr:"2px solid #333"},
-                  ].map(({v,bg:cbg,fw,bdr:cbdr},si)=>(
+                    {v:stats.cal,bg:"#fff",fw:600,show:true},
+                    {v:stats.gM,bg:"#e8e8e8",fw:500,show:true},
+                    {v:stats.gnM,bg:"#e8e8e8",fw:500,show:true},
+                    {v:stats.artMesai||0,bg:"#f5f5f5",fw:600,show:printBayram},
+                    {v:stats.faz,bg:stats.faz>0?"#bbb":"#fff",fw:700,show:true},
+                    {v:stats.zon,bg:"#ddd",fw:700,bdr:"2px solid #333",show:printGereken},
+                  ].filter(x=>x.show).map(({v,bg:cbg,fw,bdr:cbdr},si)=>(
                     <td key={si} style={{padding:"2px 3px",textAlign:"center",border:cbdr||"1px solid #444",fontSize:7.5,fontWeight:fw,background:cbg,width:34,minWidth:34,color:"#000"}}>
                       {v.toFixed(1)}
                     </td>
@@ -1076,7 +1200,17 @@ function PrintView({state,user,yil,ay,filtreBirim,onClose}){
 
   return(
     <div className="print-modal-wrapper" style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:8000,overflowY:"auto",padding:16}}>
-      <div className="no-print" style={{display:"flex",gap:10,justifyContent:"center",marginBottom:12,position:"sticky",top:0,zIndex:1}}>
+      <div className="no-print" style={{display:"flex",gap:15,justifyContent:"center",alignItems:"center",marginBottom:12,position:"sticky",top:0,zIndex:1,background:"#1f2937",padding:10,borderRadius:8}}>
+        <div style={{display:"flex",gap:15,marginRight:10}}>
+          <label style={{color:"#fff",fontSize:13,display:"flex",alignItems:"center",gap:5,cursor:"pointer"}}>
+            <input type="checkbox" checked={printBayram} onChange={e=>setPrintBayram(e.target.checked)}/>
+            Bayram Mesaisi Göster
+          </label>
+          <label style={{color:"#fff",fontSize:13,display:"flex",alignItems:"center",gap:5,cursor:"pointer"}}>
+            <input type="checkbox" checked={printGereken} onChange={e=>setPrintGereken(e.target.checked)}/>
+            Çlş. Gereken Göster
+          </label>
+        </div>
         <button onClick={doPrint} style={{background:"#0f4c81",color:"#fff",border:"none",borderRadius:5,padding:"10px 24px",fontSize:14,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
           🖨️ Yazdır / PDF Al ({toplamSayfa} sayfa)
         </button>
@@ -1175,60 +1309,6 @@ function ServisSorumluModal({birimId,birimAd,mevcut,onSave,onClose}){
   );
 }
 
-/* ── IdariIzinModal ──────────────────────────────── */
-/* [YENİ: İDARİ İZİN AYARLARI]
- * Bu modül; Yönetici veya Sorumlunun sistem üzerinde 
- * ayda maksimum 3 güne kadar İdari İzin tarihi belirleyebilmesini sağlar.
- * Seçilen günler state.idariIzinler[yil_ay] içerisine kaydedilir.
-═══════════════════════════════════════════════ */
-function IdariIzinModal({yil,ay,mevcut,onSave,onClose}){
-  const dimAy=dim(yil,ay);
-  const [secili,setSecili]=useState(mevcut||[]);
-  
-  const toggle=d=>{
-    if(secili.includes(d)) setSecili(secili.filter(x=>x!==d));
-    else if(secili.length>=3) alert("Maksimum 3 gün seçebilirsiniz.");
-    else setSecili([...secili,d].sort((a,b)=>a-b));
-  };
-  
-  return(
-    <Modal title="🏛️ İdari İzin Ayarları" onClose={onClose} width={500}>
-      <div style={{padding:"12px",background:"#eff6ff",borderRadius:6,marginBottom:16,fontSize:12,color:"#1e3a8a",borderLeft:"4px solid #3b82f6",lineHeight:1.4}}>
-        <strong>Nasıl Uygulanır?</strong><br/>
-        Bu ekrandan seçtiğiniz idari izin günlerinde <strong>ÇALIŞAN</strong> personellerin zorunlu mesai hedefinden otomatik olarak düşüm yapılır:<br/>
-        • <strong>Normal Personel:</strong> 8 saat<br/>
-        • <strong>Yarı Zamanlı:</strong> 4 saat<br/>
-        • <strong>Radyoloji:</strong> 7 saat<br/>
-        • <strong>Arefe Günü:</strong> Tüm gruplar için 5 saat<br/>
-        <em>Not: İdari izin gününde çalışmayan personelin hedefinden düşülmez. Yönetici veya Birim Sorumlusu tarafından düzenlenebilir. En fazla 3 gün seçilebilir.</em>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:6,marginBottom:20}}>
-        {Array.from({length:dimAy},(_,i)=>i+1).map(d=>{
-          const isSelected=secili.includes(d);
-          const {t}=dayInfo(yil,ay,d);
-          const isWeekend=t==="hs"||t==="tatil";
-          return(
-            <div key={d} onClick={()=>toggle(d)}
-              style={{
-                padding:"8px 0",textAlign:"center",borderRadius:4,fontSize:13,fontWeight:600,cursor:"pointer",
-                background:isSelected?"#3b82f6":isWeekend?"#f3f4f6":"#fff",
-                color:isSelected?"#fff":isWeekend?"#9ca3af":"#374151",
-                border:`1px solid ${isSelected?"#2563eb":"#d1d5db"}`,
-                boxShadow:isSelected?"0 2px 4px rgba(59,130,246,0.3)":"none",
-                userSelect:"none"
-              }}>
-              {d}
-            </div>
-          );
-        })}
-      </div>
-      <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-        <button style={S.btnG} onClick={onClose}>İptal</button>
-        <button style={S.btn} onClick={()=>{onSave(secili);onClose();}}>Kaydet</button>
-      </div>
-    </Modal>
-  );
-}
 
 /* ═══════════════════════════════════════════════
 
@@ -1374,7 +1454,7 @@ function CiftBirimBakisModal({state,yil,ay,onClose}){
                   <tr key={p.id} style={{background:i%2===0?"#fff":"#fafafa",borderBottom:"1px solid #e5e7eb"}}>
                     <td style={{padding:"8px 10px",fontWeight:700}}>{p.ad} {p.soyad}</td>
                     <td style={{padding:"8px 10px"}}><Badge text={UNVAN_AD[p.unvan]} color="#0f4c81" bg="#dbeafe"/></td>
-                    <td style={{padding:"8px 10px"}}><Badge text={bAd(p.birimId)} color="#fff" bg={BRENK[birimler.findIndex(b=>b.id===p.birimId)%BRENK.length]}/></td>
+                    <td style={{padding:"8px 10px"}}><Badge text={bAd(getPersonelBirimId(state,p.id,yil,ay))} color="#fff" bg={BRENK[birimler.findIndex(b=>b.id===getPersonelBirimId(state,p.id,yil,ay))%BRENK.length]}/></td>
                     <td style={{padding:"8px 10px",textAlign:"center",fontWeight:700}}>{veri?tamGun:"—"}</td>
                     <td style={{padding:"8px 10px",textAlign:"center",fontWeight:700}}>{veri?arefeGun:"—"}</td>
                     <td style={{padding:"8px 10px",textAlign:"center",fontWeight:700,color:"#0f4c81"}}>{veri?hesap.toFixed(1)+"s":"—"}</td>
@@ -1429,9 +1509,13 @@ function CiftBirimBakisModal({state,yil,ay,onClose}){
 /* 🔧 Özet sütun sırası → [cal, gM, gnM, faz, zon]     */
 /* PUANTAJ TABLOSU
 ═══════════════════════════════════════════════ */
+/* [AÇIKLAMA]: Yönetici ve Sorumluların gördüğü ana Puantaj Tablosu bileşenidir.
+ * - Sorumlular sadece kendi birimini görürken, yöneticiler 'Tüm Birimler' filtresini kullanabilir.
+ * - Her satırda personelin o ayki nöbet hücreleri (Cell) ve mesai özetleri (statOf) hesaplanarak çizilir.
+ * - Ayrıca yazdırma, idari izin ve açıklama notları gibi işlemlerin menüleri bu bileşenin başlığında yer alır. */
 function PuantajTablosu({state,update,user,yil,ay}){
+  const [filtreBirim,setFiltreBirim]=useState("");
   const personeller=state.personeller||[];const birimler=state.birimler||[];const puantaj=state.puantaj||{};const manuelFazla=state.manuelFazla||{};const cokluBirim=state.cokluBirim||{};const ciftBirimGun=state.ciftBirimGun||{};
-  const [filtreBirim,setFiltreBirim]=useState(user.rol==="sorumlu"?user.birimId:"");
   const [editFazla,setEditFazla]=useState(null);
   const [fazlaForm,setFazlaForm]=useState({deger:"",not:""});
   const [takvimP,setTakvimP]=useState(null);
@@ -1442,11 +1526,11 @@ function PuantajTablosu({state,update,user,yil,ay}){
   const [ciftGunModal,setCiftGunModal]=useState(null); // personel obj
   const [showCiftBakis,setShowCiftBakis]=useState(false);
   const [showAciklama,setShowAciklama]=useState(false);
-  const [showIdariIzin,setShowIdariIzin]=useState(false);
+
   const [aciklamaForm,setAciklamaForm]=useState("");
   const efBirim=user.rol==="sorumlu"?user.birimId:filtreBirim;
   const days=Array.from({length:dim(yil,ay)},(_,i)=>i+1);
-  const filtered=personeller.filter(p=>!efBirim||p.birimId===efBirim);
+  const filtered=getFiltrelenmisPersonel(state, efBirim, yil, ay);
   const pk=pid=>`${pid}_${yil}_${ay}`;
   const setCell=(pid,d,val)=>{
     const k=pk(pid);
@@ -1514,17 +1598,7 @@ function PuantajTablosu({state,update,user,yil,ay}){
               ✍️ {state.imzaYetkilileri?.servisSorumluBirim?.[user.birimId]?"Adım: "+state.imzaYetkilileri.servisSorumluBirim[user.birimId]:"Servis Sorumlu Adım"}
             </button>
           )}
-          {/* [YENİ]: Ay içinde İdari İzin eklendiyse, herkesin görebilmesi için yeşil uyarı metni çıkar. */}
-          {state.idariIzinler?.[`${yil}_${ay}`]?.length>0 && (
-            <span style={{fontSize:11,color:"#059669",background:"#d1fae5",padding:"4px 8px",borderRadius:4,fontWeight:600}}>
-              ✅ Bu ay idari izin uygulandı
-            </span>
-          )}
-          {/* [YENİ]: İdari İzin modalını (ekranını) açan buton */}
-          <button onClick={()=>setShowIdariIzin(true)}
-            style={{background:"#8b5cf6",color:"#fff",border:"none",borderRadius:5,padding:"7px 14px",cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center",gap:6}}>
-            🏛️ İdari İzin
-          </button>
+
           {/* [YENİ]: Kullanıcının puantaja özel not ekleyebilmesi için oluşturulan "Açıklamalar" modülü butonu */}
           <button onClick={()=>{
             const pkA=`${efBirim||"genel"}_${yil}_${ay}`;
@@ -1566,6 +1640,7 @@ function PuantajTablosu({state,update,user,yil,ay}){
               {sumTh("Çalışma\nSaati")}
               {sumTh("Gece\nMesai")}
               {sumTh("Gündüz\nMesai")}
+              {sumTh("Bayram\nMesaisi")}
               {sumTh("Fazla\nMesai")}
               {sumTh("Çlş.\nGereken")}
               {user.rol==="yonetici"&&<th style={{padding:"6px 4px",background:"#1e3a5f",color:"#fff",textAlign:"center",minWidth:52,fontSize:10,position:"sticky",top:0,zIndex:5}}>İşlem</th>}
@@ -1597,20 +1672,24 @@ function PuantajTablosu({state,update,user,yil,ay}){
                   </td>
                   {user.rol==="yonetici"&&(
                     <td style={{padding:"4px",textAlign:"center",background:rb}}>
-                      <span style={{fontSize:10,padding:"2px 6px",borderRadius:8,background:bRenk(p.birimId),color:"#fff",fontWeight:700}}>{bAd(p.birimId)}</span>
+                      {/* [AÇIKLAMA]: Uzun birim adlarının (örn: ANESTEZİ YOĞUN BAKIM) tabloyu sağa doğru genişletmesini önlemek amacıyla;
+                          whiteSpace:"normal", display:"inline-block" ve maxWidth:70 eklendi.
+                          Böylece kelimeler yan yana sığmadığında otomatik olarak alt satıra geçer. */}
+                      <span style={{fontSize:10,padding:"4px 6px",borderRadius:8,background:bRenk(getPersonelBirimId(state,p.id,yil,ay)),color:"#fff",fontWeight:700,display:"inline-block",whiteSpace:"normal",lineHeight:1.2,maxWidth:70}}>{bAd(getPersonelBirimId(state,p.id,yil,ay))}</span>
                     </td>
                   )}
                   {days.map(d=>(
-                    <Cell key={d} val={row[d]||""} dt={dayInfo(yil,ay,d).t} editable={canEdit(p)} onSave={val=>setCell(p.id,d,val)} sutDon={p.calisma==="sut"?getSutDonemi(p,yil,ay,d):null} sendika={isSendikaGunu(p,yil,ay,d)}/>
+                    <Cell key={d} val={row[d]||""} dt={dayInfo(yil,ay,d).t} editable={canEdit(p)} unvan={p.unvan} onSave={val=>setCell(p.id,d,val)} sutDon={p.calisma==="sut"?getSutDonemi(p,yil,ay,d):null} sendika={isSendikaGunu(p,yil,ay,d)}/>
                   ))}
                   {[
                     {v:stats.cal,bg:rb,hl:false},
                     {v:stats.gM,bg:stats.gM>0?"#f0fdf4":rb,hl:stats.gM>0},
                     {v:stats.gnM,bg:stats.gnM>0?"#f0fdf4":rb,hl:stats.gnM>0},
+                    {v:stats.artMesai||0,bg:(stats.artMesai||0)>0?"#fff7ed":rb,hl:(stats.artMesai||0)>0,color:"#9a3412"},
                     {v:stats.faz,bg:stats.faz>0?"#ecfdf5":rb,hl:stats.faz>0},
                     {v:stats.zon,bg:p.ciftBirim&&!ciftBirimGun[pk(p.id)]?"#fef9c3":"#f8fafc",hl:false,last:true},
-                  ].map(({v,bg,hl,last},si)=>(
-                    <td key={si} style={{padding:"4px 6px",textAlign:"center",background:bg,color:hl?"#15803d":last?"#0f4c81":"#374151",fontWeight:si===3&&v>0?700:last?600:500,fontSize:11,minWidth:64,borderLeft:last?"2px solid #93c5fd":"1px solid #e5e7eb",borderRight:last?"2px solid #93c5fd":"none"}}>
+                  ].map(({v,bg,hl,last,color},si)=>(
+                    <td key={si} style={{padding:"4px 6px",textAlign:"center",background:bg,color:color?color:(hl?"#15803d":last?"#0f4c81":"#374151"),fontWeight:si===3&&v>0?700:si===4&&v>0?700:last?600:500,fontSize:11,minWidth:64,borderLeft:last?"2px solid #93c5fd":"1px solid #e5e7eb",borderRight:last?"2px solid #93c5fd":"none"}}>
                       {last&&p.ciftBirim&&!ciftBirimGun[pk(p.id)]
                         ?<span style={{fontSize:9,color:"#d97706",fontWeight:700}}>⚠️ Gir</span>
                         :<>{v.toFixed(1)}<span style={{fontSize:9,color:"#9ca3af"}}>s</span></>}
@@ -1731,14 +1810,7 @@ function PuantajTablosu({state,update,user,yil,ay}){
           </div>
         </Modal>
       )}
-      {showIdariIzin&&<IdariIzinModal
-        yil={yil} ay={ay}
-        mevcut={state.idariIzinler?.[`${yil}_${ay}`]||[]}
-        onSave={arr=>{
-          update(s=>({...s,idariIzinler:{...(s.idariIzinler||{}),[`${yil}_${ay}`]:arr}}));
-        }}
-        onClose={()=>setShowIdariIzin(false)}
-      />}
+
     </div>
   );
 }
@@ -1751,10 +1823,11 @@ function PuantajTablosu({state,update,user,yil,ay}){
 /* 🔧 Sendika YKÜ checkbox → sendikaYku state           */
 /* PERSONEL YÖNETİMİ
 ═══════════════════════════════════════════════ */
-function PersonelYonetimi({state,update,user}){
+function PersonelYonetimi({state,update,user,yil,ay}){
   const personeller=state.personeller||[];const birimler=state.birimler||[];
   const isSorumlu=user.rol==="sorumlu";
   const [show,setShow]=useState(false);const [editP,setEditP]=useState(null);
+  const [showHavuz,setShowHavuz]=useState(false);
   const blank={ad:"",soyad:"",unvan:"hemsire",calisma:"tam",birimId:isSorumlu?user.birimId:(birimler[0]?.id||""),sutBaslangic:"",gebeligTipi:"YTekil",sendikaYku:false,sendikaGun:"Pazartesi",ciftBirim:false};
   const [form,setForm]=useState(blank);
   const [fUnvan,setFUnvan]=useState("");const [fBirim,setFBirim]=useState(isSorumlu?user.birimId:"");
@@ -1762,26 +1835,59 @@ function PersonelYonetimi({state,update,user}){
   const openEdit=p=>{setForm({ad:p.ad,soyad:p.soyad,unvan:p.unvan,calisma:p.calisma,birimId:p.birimId,sutBaslangic:p.sutBaslangic||"",gebeligTipi:p.gebeligTipi||"YTekil",sendikaYku:p.sendikaYku||false,sendikaGun:p.sendikaGun||"Pazartesi",ciftBirim:p.ciftBirim||false});setEditP(p);setShow(true);};
   const save=()=>{
     if(!form.ad.trim()||!form.soyad.trim()) return alert("Ad ve soyad zorunludur");
-    if(editP) update(s=>({...s,personeller:s.personeller.map(p=>p.id===editP.id?{...p,...form}:p)}));
-    else update(s=>({...s,personeller:[...s.personeller,{id:"p"+Date.now(),...form}]}));
+    const bid = form.birimId;
+    const k = `${bid}_${yil}_${ay}`;
+    if(editP) {
+      update(s=>({...s,personeller:s.personeller.map(p=>p.id===editP.id?{...p,...form}:p)}));
+    } else {
+      const nid = "p"+Date.now();
+      update(s=>{
+        let liste = s.aylikListe?.[k] || s.personeller.filter(p=>p.birimId===bid).map(p=>p.id);
+        return {...s, personeller:[...s.personeller,{id:nid,...form}], aylikListe:{...(s.aylikListe||{}), [k]: [...liste, nid]}};
+      });
+    }
     setShow(false);
   };
-  const del=id=>{if(!window.confirm("Bu personeli silmek istiyor musunuz?"))return;update(s=>({...s,personeller:s.personeller.filter(p=>p.id!==id)}));};
+  const del=id=>{
+    if(!window.confirm("Bu personeli bu ayın listesinden çıkarmak istiyor musunuz? Geçmiş puantajları etkilenmez."))return;
+    const ef = isSorumlu ? user.birimId : fBirim;
+    if(!ef) return alert("Lütfen önce birim seçiniz!");
+    const k = `${ef}_${yil}_${ay}`;
+    update(s=>{
+      let liste = s.aylikListe?.[k] || s.personeller.filter(p=>p.birimId===ef).map(p=>p.id);
+      liste = liste.filter(x => x !== id);
+      return {...s, aylikListe:{...(s.aylikListe||{}), [k]:liste}};
+    });
+  };
+  const addToRoster=id=>{
+    const ef = isSorumlu ? user.birimId : fBirim;
+    if(!ef) return alert("Lütfen önce birim seçiniz!");
+    const k = `${ef}_${yil}_${ay}`;
+    update(s=>{
+      let liste = s.aylikListe?.[k] || s.personeller.filter(p=>p.birimId===ef).map(p=>p.id);
+      if(!liste.includes(id)) liste.push(id);
+      return {...s, aylikListe:{...(s.aylikListe||{}), [k]:liste}};
+    });
+    setShowHavuz(false);
+  };
   const bAd=id=>birimler.find(b=>b.id===id)?.ad||"-";
-  const filtered=personeller.filter(p=>{
-    if(isSorumlu&&p.birimId!==user.birimId) return false;
+  const filtered = getFiltrelenmisPersonel(state, isSorumlu ? user.birimId : fBirim, yil, ay).filter(p=>{
     if(fUnvan&&p.unvan!==fUnvan) return false;
-    if(!isSorumlu&&fBirim&&p.birimId!==fBirim) return false;
     return true;
   });
+  
+  const havuz = personeller.filter(p => !filtered.some(f => f.id === p.id));
   return(
     <div style={{padding:20,fontFamily:"'Segoe UI',system-ui,sans-serif",display:"flex",flexDirection:"column",height:"100%",boxSizing:"border-box"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
         <div>
-          <h2 style={{margin:0,fontSize:18,color:"#0f4c81",fontWeight:800}}>Personel Yönetimi</h2>
-          {isSorumlu&&<span style={{fontSize:12,color:"#6b7280"}}>Birim: {bAd(user.birimId)} · Sadece kendi biriminizin personelini yönetebilirsiniz</span>}
+          <h2 style={{margin:0,fontSize:18,color:"#0f4c81",fontWeight:800}}>{AYLAR[ay]} {yil} Personel Listesi</h2>
+          {isSorumlu&&<span style={{fontSize:12,color:"#6b7280"}}>Birim: {bAd(user.birimId)} · Sadece {AYLAR[ay]} ayındaki kendi listenizi yönetebilirsiniz</span>}
         </div>
-        <button style={S.btn} onClick={openAdd}>+ Personel Ekle</button>
+        <div style={{display:"flex",gap:8}}>
+          {(isSorumlu||fBirim)&&<button style={S.btnG} onClick={()=>setShowHavuz(true)}>Sistemden Çek (Havuz)</button>}
+          <button style={S.btn} onClick={openAdd}>+ Yeni Personel</button>
+        </div>
       </div>
       <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap",alignItems:"center"}}>
         <select value={fUnvan} onChange={e=>setFUnvan(e.target.value)} style={{...S.inp,width:160,padding:"6px 8px"}}>
@@ -1819,10 +1925,10 @@ function PersonelYonetimi({state,update,user}){
                   {p.sendikaYku&&<div style={{fontSize:10,color:"#c2410c",marginTop:2,fontWeight:600}}>🔴 Sendika YKÜ · {p.sendikaGun}</div>}
                   {p.ciftBirim&&<div style={{fontSize:10,color:"#3730a3",marginTop:2,fontWeight:600}}>🔀 Çift Birim</div>}
                 </td>
-                <td style={{padding:"9px 12px"}}><Badge text={bAd(p.birimId)} color="#fff" bg={BRENK[birimler.findIndex(b=>b.id===p.birimId)%BRENK.length]}/></td>
+                <td style={{padding:"9px 12px"}}><Badge text={bAd(getPersonelBirimId(state,p.id,yil,ay))} color="#fff" bg={BRENK[birimler.findIndex(b=>b.id===getPersonelBirimId(state,p.id,yil,ay))%BRENK.length]}/></td>
                 <td style={{padding:"9px 12px"}}>
                   <button style={{...S.btnG,marginRight:6,padding:"5px 10px",fontSize:12}} onClick={()=>openEdit(p)}>✏️ Düzenle</button>
-                  <button style={{...S.btnR,padding:"5px 10px",fontSize:12}} onClick={()=>del(p.id)}>🗑 Sil</button>
+                  <button style={{...S.btnR,padding:"5px 10px",fontSize:12}} onClick={()=>del(p.id)}>❌ Bu Aydan Çıkar</button>
                 </td>
               </tr>
             ))}
@@ -1869,8 +1975,8 @@ function PersonelYonetimi({state,update,user}){
                 return(
                   <div style={{fontSize:11,display:"flex",flexDirection:"column",gap:4,marginTop:4}}>
                     <span style={{display:"flex",alignItems:"center",gap:6}}><span style={{width:10,height:10,background:"#f3e8ff",border:"1px solid #d8b4fe",borderRadius:2,display:"inline-block"}}/>🟣 Analık İzni: {fmtTarih(oz.bas)} → {fmtTarih(oz.analikBitis)} ({(GEBELIK[form.gebeligTipi||"YTekil"]?.hafta)} hafta)</span>
-                    <span style={{display:"flex",alignItems:"center",gap:6}}><span style={{width:10,height:10,background:"#fef9c3",border:"1px solid #fde047",borderRadius:2,display:"inline-block"}}/>🟡 Süt 1.Dönem (3s): {fmtTarih(oz.analikBitis)} → {fmtTarih(oz.sut1Bitis)}</span>
-                    <span style={{display:"flex",alignItems:"center",gap:6}}><span style={{width:10,height:10,background:"#fed7aa",border:"1px solid #fb923c",borderRadius:2,display:"inline-block"}}/>🟠 Süt 2.Dönem (1.5s): {fmtTarih(oz.sut1Bitis)} → {fmtTarih(oz.sut2Bitis)}</span>
+                    <span style={{display:"flex",alignItems:"center",gap:6}}><span style={{width:10,height:10,background:"#dbeafe",border:"1px solid #93c5fd",borderRadius:2,display:"inline-block"}}/>🔵 Süt 1.Dönem (3s): {fmtTarih(oz.analikBitis)} → {fmtTarih(oz.sut1Bitis)}</span>
+                    <span style={{display:"flex",alignItems:"center",gap:6}}><span style={{width:10,height:10,background:"#dcfce7",border:"1px solid #86efac",borderRadius:2,display:"inline-block"}}/>🟢 Süt 2.Dönem (1.5s): {fmtTarih(oz.sut1Bitis)} → {fmtTarih(oz.sut2Bitis)}</span>
                   </div>
                 );
               })()}
@@ -1932,6 +2038,30 @@ function PersonelYonetimi({state,update,user}){
           <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
             <button style={S.btnG} onClick={()=>setShow(false)}>İptal</button>
             <button style={S.btn} onClick={save}>Kaydet</button>
+          </div>
+        </Modal>
+      )}
+      {showHavuz&&(
+        <Modal title="Sistemden Personel Çek (Havuz)" onClose={()=>setShowHavuz(false)} width={600}>
+          <div style={{fontSize:13,color:"#4b5563",marginBottom:14}}>
+            Hastanede tanımlı olup şu anki filtrelenmiş listenizde olmayan personeller aşağıdadır.<br/>
+            Eğer bir personelin tamamen sistemde kayıtlı olmadığını düşünüyorsanız "Yeni Personel" butonunu kullanın.
+          </div>
+          <div style={{maxHeight:400,overflowY:"auto",border:"1px solid #e5e7eb",borderRadius:5}}>
+            {havuz.length===0?<div style={{padding:16,textAlign:"center",color:"#9ca3af",fontSize:13}}>Havuzda eklenecek personel yok.</div>:
+              havuz.map(p=>(
+                <div key={p.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px",borderBottom:"1px solid #e5e7eb",background:"#f9fafb"}}>
+                  <div>
+                    <div style={{fontWeight:700,fontSize:14,color:"#111827"}}>{p.ad} {p.soyad}</div>
+                    <div style={{fontSize:12,color:"#6b7280",marginTop:2}}>
+                      <Badge text={UNVAN_AD[p.unvan]} color="#0f4c81" bg="#dbeafe"/>
+                      <span style={{marginLeft:6}}>Kayıtlı Birim: <strong>{bAd(p.birimId)}</strong></span>
+                    </div>
+                  </div>
+                  <button style={{...S.btnGrn,padding:"6px 14px",fontSize:12}} onClick={()=>addToRoster(p.id)}>+ Listeme Ekle</button>
+                </div>
+              ))
+            }
           </div>
         </Modal>
       )}
@@ -2065,6 +2195,81 @@ function KullanicilarYonetimi({state,update}){
   );
 }
 
+/* ── Mesaj Kutusu ────────────────────────────────────── */
+function MesajKutusu({state,update,user}){
+  const mesajlar=state.mesajlar||[];
+  const birimler=state.birimler||[];
+  const [mesajTxt,setMesajTxt]=useState("");
+  const [hedefBirim,setHedefBirim]=useState("tumu");
+
+  const gonder=()=>{
+    if(!mesajTxt.trim())return alert("Lütfen mesaj girin");
+    const yeniMesaj = {
+      id:"msg_"+Date.now(),
+      gonderenId:user.id,
+      gonderenAd:user.ad,
+      aliciBirimId:hedefBirim,
+      metin:mesajTxt,
+      tarih:new Date().toISOString()
+    };
+    update(s=>({...s,mesajlar:[yeniMesaj, ...(s.mesajlar||[])]}));
+    setMesajTxt("");
+    alert("Mesaj başarıyla gönderildi!");
+  };
+
+  const formatTarih=(iso)=>{
+    try{
+      const d=new Date(iso);
+      return d.toLocaleDateString("tr-TR",{day:"2-digit",month:"long",year:"numeric",hour:"2-digit",minute:"2-digit"});
+    }catch(e){return iso;}
+  };
+
+  const myMessages=user.rol==="yonetici" ? mesajlar : mesajlar.filter(m=>m.aliciBirimId==="tumu" || m.aliciBirimId===user.birimId);
+
+  return(
+    <div style={{padding:20,fontFamily:"'Segoe UI',system-ui,sans-serif",display:"flex",flexDirection:"column",height:"100%",boxSizing:"border-box"}}>
+      <h2 style={{margin:0,fontSize:18,color:"#0f4c81",fontWeight:800,marginBottom:16}}>✉️ Mesajlar</h2>
+      
+      {user.rol==="yonetici" && (
+        <div style={{background:"#fff",padding:16,borderRadius:8,border:"1px solid #e5e7eb",marginBottom:20,boxShadow:"0 1px 4px rgba(0,0,0,.06)"}}>
+          <h3 style={{marginTop:0,marginBottom:12,fontSize:14,color:"#374151"}}>Yeni Mesaj Gönder</h3>
+          <div style={{display:"flex",gap:12,marginBottom:12}}>
+            <select style={{...S.inp,width:200}} value={hedefBirim} onChange={e=>setHedefBirim(e.target.value)}>
+              <option value="tumu">Tüm Birimler</option>
+              {birimler.map(b=><option key={b.id} value={b.id}>{b.ad}</option>)}
+            </select>
+          </div>
+          <textarea style={{...S.inp,minHeight:80,resize:"vertical"}} placeholder="Mesajınızı buraya yazın..." value={mesajTxt} onChange={e=>setMesajTxt(e.target.value)} />
+          <div style={{display:"flex",justifyContent:"flex-end",marginTop:10}}>
+            <button style={{...S.btn,padding:"8px 24px"}} onClick={gonder}>Gönder</button>
+          </div>
+        </div>
+      )}
+
+      <div style={{flex:1,overflow:"auto",display:"flex",flexDirection:"column",gap:12,minHeight:0}}>
+        {myMessages.length===0 && (
+          <div style={{textAlign:"center",color:"#6b7280",marginTop:40,fontSize:14}}>Henüz bir mesaj bulunmuyor.</div>
+        )}
+        {myMessages.map(m=>{
+          const isGiden=user.rol==="yonetici";
+          const bAd=m.aliciBirimId==="tumu"?"Tüm Birimler":birimler.find(b=>b.id===m.aliciBirimId)?.ad||"Silinmiş Birim";
+          return(
+            <div key={m.id} style={{background:"#fff",borderLeft:isGiden?"4px solid #93c5fd":"4px solid #10b981",padding:14,borderRadius:"0 8px 8px 0",boxShadow:"0 1px 3px rgba(0,0,0,.05)"}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+                <div style={{fontSize:12,fontWeight:700,color:isGiden?"#0f4c81":"#065f46"}}>
+                  {isGiden ? `Kime: ${bAd}` : `Gönderen: ${m.gonderenAd}`}
+                </div>
+                <div style={{fontSize:11,color:"#6b7280"}}>{formatTarih(m.tarih)}</div>
+              </div>
+              <div style={{fontSize:14,color:"#374151",lineHeight:1.5,whiteSpace:"pre-wrap"}}>{m.metin}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 
 /* ═══════════════════════════════════════════════
 
@@ -2092,6 +2297,35 @@ export default function App(){
   const [yil,setYil]=useState(2026);
   const [ay,setAy]=useState(new Date().getMonth()+1);
   const [loading,setLoading]=useState(true);
+
+  const isSorumlu = user?.rol === "sorumlu";
+  const myMessages = isSorumlu ? (state.mesajlar||[]).filter(m=>m.aliciBirimId==="tumu" || m.aliciBirimId===user.birimId) : [];
+  const sonOkuma = state.sonOkumaZamani?.[user?.id] || "1970-01-01T00:00:00.000Z";
+  const unreadCount = myMessages.filter(m => m.gonderenId !== user?.id && m.tarih > sonOkuma).length;
+
+  useEffect(()=>{
+    if(tab==="mesajlar" && unreadCount > 0 && user?.id) {
+      const now = new Date().toISOString();
+      setState(prev=>{
+        const next = {...prev, sonOkumaZamani:{...(prev.sonOkumaZamani||{}), [user.id]: now}};
+        try{ window.storage.set("nobet_v3",JSON.stringify(next)).catch(()=>{}); }catch(e){}
+        try{ localStorage.setItem("nobet_v3",JSON.stringify(next)); }catch(e){}
+        return next;
+      });
+    }
+  }, [tab, unreadCount, user?.id]);
+  
+  // [AÇIKLAMA]: Uygulamanın görünüm (zoom) boyutunu ayarlar ve tarayıcı hafızasında saklar.
+  const [appZoom,setAppZoom]=useState(()=>{
+    try{ const z=localStorage.getItem("app_zoom"); return z?parseInt(z,10):100; }catch(e){ return 100; }
+  });
+  
+  useEffect(()=>{
+    try{ localStorage.setItem("app_zoom", appZoom); }catch(e){}
+    document.body.style.zoom = appZoom + "%";
+  },[appZoom]);
+  /* [AÇIKLAMA]: Uygulama ilk açıldığında LocalStorage veya IndexedDB üzerinden son kaydedilen (offline) veriyi yükler.
+   * Bu sayede internet kesilse veya sayfa yenilense bile girilen puantaj verileri kaybolmaz. */
   useEffect(()=>{
     const load=async()=>{
       try{
@@ -2109,6 +2343,7 @@ export default function App(){
             cokluBirim:loaded.cokluBirim||{},
             manuelFazla:loaded.manuelFazla||{},
             puantaj:loaded.puantaj||{},
+            aylikListe:loaded.aylikListe||{},
           });
         }
       }catch(e){console.error("Load error:",e);}
@@ -2135,18 +2370,21 @@ export default function App(){
     // [YENİ]: 100vh ve flex-direction:column ile sayfanın aşağı doğru taşması ve scroll sırasında tablo başlıklarının verilerle çakışması (overlap) hatası önlendi.
     <div className="print-reset" style={{height:"100vh",background:"#f1f5f9",fontFamily:"'Segoe UI',system-ui,sans-serif",display:"flex",flexDirection:"column",overflow:"hidden"}}>
       <Header user={user} tab={tab} setTab={setTab} yil={yil} ay={ay}
+        appZoom={appZoom} setAppZoom={setAppZoom}
         setYil={y=>{setYil(y);setTab("puantaj");}} setAy={m=>{setAy(m);setTab("puantaj");}}
         onLogout={()=>{setUser(null);setTab("puantaj");}}
         onSifreDegistir={(uid,pwd)=>{
           update(s=>({...s,users:s.users.map(u=>u.id===uid?{...u,pass:pwd}:u)}));
           setUser(u=>({...u,pass:pwd}));
         }}
-        birimler={state.birimler}/>
+        birimler={state.birimler}
+        unreadCount={unreadCount}/>
       <div className="print-reset" style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}>
         {tab==="puantaj"&&<PuantajTablosu {...props}/>}
         {tab==="personel"&&<PersonelYonetimi {...props}/>}
         {tab==="birimler"&&user.rol==="yonetici"&&<BirimlerYonetimi {...props}/>}
         {tab==="kullanicilar"&&user.rol==="yonetici"&&<KullanicilarYonetimi {...props}/>}
+        {tab==="mesajlar"&&<MesajKutusu {...props}/>}
       </div>
     </div>
   );
